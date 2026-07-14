@@ -1,7 +1,10 @@
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_vulkan.h>
 #include <SDL3/SDL_video.h>
 #include <SDL3/SDL_events.h>
+#include <chrono>
+#include <glm/ext/matrix_float4x4.hpp>
 
 #define APP_HPP_IMPLEMENTATION
 #include "app.hpp"
@@ -9,7 +12,6 @@
 #include "utils/utils.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <limits>
 #include <stdexcept>
 
@@ -32,6 +34,14 @@ void Application::initWindow() {
   if (!window) {
     throw std::runtime_error(std::string("SDL_CreateWindow failed") + SDL_GetError());
   }
+
+  glm::vec3 dir;
+  dir.x = cos(glm::radians(cameraYaw)) * cos(glm::radians(cameraPitch));
+  dir.y = sin(glm::radians(cameraPitch));
+  dir.z = sin(glm::radians(cameraYaw)) * cos(glm::radians(cameraPitch));
+  cameraFront = glm::normalize(dir);
+
+  SDL_SetWindowRelativeMouseMode(window, true);
 }
 
 
@@ -971,10 +981,10 @@ void Application::updateUniformBuffer(uint32_t currentImage) {
   float time = std::chrono::duration<float>(currentTime - startTime).count();
 
   UniformBufferObject ubo{};
-  ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-  ubo.view  = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.model = glm::mat4(1.0f);
+  ubo.view  = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
   ubo.proj  =
-    glm::perspective(glm::radians(45.0f), static_cast<float>(swapChainExtent.width) / static_cast<float >(swapChainExtent.height), 0.1f, 10.0f);
+    glm::perspective(glm::radians(45.0f), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 10.0f);
   ubo.proj[1][1] *= -1;
 
   memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
@@ -1099,6 +1109,8 @@ void Application::setupDebugMessenger() {
 }
 
 void Application::mainLoop() {
+  lastFrameTime = std::chrono::high_resolution_clock::now();
+
   while (running) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -1113,14 +1125,54 @@ void Application::mainLoop() {
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
           framebufferResized = true;
           break;
+        case SDL_EVENT_MOUSE_MOTION:
+          if (mouseCaptured) {
+            cameraYaw   -= event.motion.xrel * mouseSensitivity;
+            cameraPitch += event.motion.yrel * mouseSensitivity;
+            cameraPitch  = std::clamp(cameraPitch, -89.0f, 89.0f);
+
+            glm::vec3 dir;
+            dir.x = cos(glm::radians(cameraYaw)) * cos(glm::radians(cameraPitch));
+            dir.y = sin(glm::radians(cameraPitch));
+            dir.z = sin(glm::radians(cameraYaw)) * cos(glm::radians(cameraPitch));
+            cameraFront = glm::normalize(dir);
+          }
+          break;
+        case SDL_EVENT_KEY_DOWN:
+          if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
+            mouseCaptured = !mouseCaptured;
+            SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
+          }
+          break;
         default:
           break;
       }
     }
+
+    auto now = std::chrono::high_resolution_clock::now();
+    float deltaTime = std::chrono::duration<float>(now - lastFrameTime).count();
+    deltaTime = std::min(deltaTime, 0.1f);
+    lastFrameTime = now;
+
+    processInput(deltaTime);
     drawFrame();
 	}
 
   device.waitIdle();
+}
+
+void Application::processInput(float deltaTime) {
+  const bool *keys = SDL_GetKeyboardState(nullptr);
+  float velocity = cameraSpeed * deltaTime;
+
+  glm::vec3 right = glm::normalize(glm::cross(cameraFront, cameraUp));
+
+  if (keys[SDL_SCANCODE_W]) cameraPos += cameraUp * velocity;
+  if (keys[SDL_SCANCODE_S]) cameraPos -= cameraUp * velocity;
+  if (keys[SDL_SCANCODE_A]) cameraPos -= right * velocity;
+  if (keys[SDL_SCANCODE_D]) cameraPos += right * velocity;
+  if (keys[SDL_SCANCODE_SPACE])    cameraPos -= cameraFront * velocity;
+  if (keys[SDL_SCANCODE_LCTRL])    cameraPos += cameraFront * velocity;
 }
 
 void Application::cleanup() {

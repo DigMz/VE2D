@@ -6,6 +6,7 @@
 #include <cstring>
 #include <iostream>
 #include <vector>
+#include <chrono>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #	include <vulkan/vulkan_raii.hpp>
@@ -91,6 +92,7 @@ public:
 
 private:
   bool                                 running        = true;
+
 	SDL_Window                           *window        = nullptr;
   vk::raii::Context                    context;
   vk::raii::Instance                   instance       = nullptr;
@@ -156,6 +158,21 @@ private:
   std::vector<vk::raii::Fence>         inFlightFences;
   uint32_t                             frameIndex         = 0;
   bool                                 framebufferResized = false;
+
+  const bool                           *keys = SDL_GetKeyboardState(nullptr);
+  glm::vec3 cameraPos   = {0.0f, 0.0f, 2.0f};
+  glm::vec3 cameraFront = glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f));
+  glm::vec3 cameraUp    = {0.0f, -1.0f, 0.0f};
+  float     cameraYaw   = -90.0f;
+  float     cameraPitch = 0.0f;
+  float     cameraSpeed = 3.0f; // units/sec
+
+  bool  mouseCaptured = true;
+  float mouseSensitivity = 0.1f;
+
+  std::chrono::high_resolution_clock::time_point lastFrameTime;
+
+  void processInput(float deltaTime);
 
   std::vector<const char *> requiredDeviceExtension = {
     vk::KHRSwapchainExtensionName
