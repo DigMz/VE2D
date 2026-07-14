@@ -1,10 +1,15 @@
+#include "vulkan/vulkan.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_vulkan.h>
 #include <SDL3/SDL_video.h>
 #include <SDL3/SDL_events.h>
 #include <chrono>
+#include <cstdint>
+#include <cstring>
 #include <glm/ext/matrix_float4x4.hpp>
+#include <vulkan/vulkan.hpp>
 
 #define APP_HPP_IMPLEMENTATION
 #include "app.hpp"
@@ -548,10 +553,6 @@ void Application::createTextureSampler() {
   textureSampler = vk::raii::Sampler(device, samplerInfo);
 }
 
-void Application::createTextureImageView() {
-  textureImageView = createImageView(*textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
-}
-
 std::pair<vk::raii::Image, vk::raii::DeviceMemory> Application::createImage(
   uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties
 ) {
@@ -576,6 +577,10 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Application::createImage(
   image.bindMemory(imageMemory, 0);
 
   return {std::move(image), std::move(imageMemory)};
+}
+
+void Application::createTextureImageView() {
+  textureImageView = createImageView(*textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
 }
 
 vk::raii::ImageView Application::createImageView(vk::Image const &image, vk::Format format, vk::ImageAspectFlags aspectFlags) {
@@ -668,7 +673,7 @@ std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> Application::createBuffer(vk
 }
 
 void Application::createVertexBuffer() {
-  vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.capacity();
+  vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
   auto [stagingBuffer, stagingBufferMemory] =
     createBuffer(bufferSize,
@@ -683,6 +688,38 @@ void Application::createVertexBuffer() {
     createBuffer(bufferSize, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
   copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+  vertexBufferCapacity = bufferSize;
+}
+
+void Application::updateVertexBuffer() {
+  vk::DeviceSize requiredSize = sizeof(vertices[0]) * vertices.size();
+  auto [stagingBuffer, stagingBufferMemory] = createBuffer(
+    requiredSize,
+    vk::BufferUsageFlagBits::eTransferSrc,
+    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+  );
+
+  void* data = stagingBufferMemory.mapMemory(0, requiredSize);
+  memcpy(data, vertices.data(), requiredSize);
+  stagingBufferMemory.unmapMemory();
+
+  if (requiredSize > vertexBufferCapacity) {
+    vk::DeviceSize newCapacity = vertexBufferCapacity == 0 ? requiredSize : vertexBufferCapacity;
+    while (newCapacity < requiredSize) newCapacity *= 2;
+
+    device.waitIdle(); // old buffer may still be in flight
+
+    std::tie(vertexBuffer, vertexBufferMemory) = createBuffer(
+      newCapacity,
+      vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    vertexBufferCapacity = newCapacity;
+  }
+
+  copyBuffer(stagingBuffer, vertexBuffer, requiredSize);
 }
 
 void Application::createIndexBuffer() {
@@ -701,6 +738,52 @@ void Application::createIndexBuffer() {
     createBuffer(bufferSize, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
   copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+
+  indexBufferCapacity = bufferSize;
+}
+
+void Application::updateIndexBuffer() {
+  vk::DeviceSize requiredSize = sizeof(indices[0]) * indices.size();
+  auto [stagingBuffer, stagingBufferMemory] = createBuffer(
+    requiredSize,
+    vk::BufferUsageFlagBits::eTransferSrc,
+    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+  );
+
+  void* data = stagingBufferMemory.mapMemory(0, requiredSize);
+  memcpy(data, indices.data(), requiredSize);
+  stagingBufferMemory.unmapMemory();
+
+  if (requiredSize > indexBufferCapacity) {
+    vk::DeviceSize newCapacity = indexBufferCapacity == 0 ? requiredSize : indexBufferCapacity;
+    while (newCapacity < requiredSize) newCapacity *= 2;
+
+    device.waitIdle(); // old buffer may still be in flight
+
+    std::tie(indexBuffer, indexBufferMemory) = createBuffer(
+      newCapacity,
+      vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    indexBufferCapacity = newCapacity;
+  }
+
+  copyBuffer(stagingBuffer, indexBuffer, requiredSize);
+}
+
+void Application::addQuad(Quad const &quad) {
+  uint32_t base = static_cast<uint32_t>(vertices.size());
+  auto verts = quad.toVertices();
+  vertices.insert(vertices.end(), verts.begin(), verts.end());
+
+  indices.insert(indices.end(), {
+    base + 0, base + 1, base + 2,
+    base + 2, base + 3, base + 0
+  });
+
+  updateVertexBuffer(); 
+  updateIndexBuffer();
 }
 
 void Application::createUniformBuffers() {
@@ -1142,6 +1225,16 @@ void Application::mainLoop() {
           if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
             mouseCaptured = !mouseCaptured;
             SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
+          }
+          if (event.key.scancode == SDL_SCANCODE_Q) {
+            addQuad({
+              {{
+                { 0.5f, -0.5f,  0.0f},
+                { 1.5f, -0.5f,  0.0f},
+                { 1.5f,  0.5f,  0.0f},
+                { 0.5f,  0.5f,  0.0f}
+              }}
+            });
           }
           break;
         default:

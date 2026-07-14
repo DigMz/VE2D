@@ -2,6 +2,7 @@
 
 #include <array>
 #include <assert.h>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -78,6 +79,21 @@ struct std::hash<Vertex> {
   }
 };
 
+struct Quad {
+  std::array<glm::vec3, 4> points;
+  glm::vec3                color = {1.0f, 1.0f, 1.0f};
+  uint32_t                 texIndex = 0;
+
+  std::array<Vertex, 4> toVertices() const {
+    return {{
+      {points[0], color, {1.0f, 0.0f}},
+      {points[1], color, {0.0f, 0.0f}},
+      {points[2], color, {0.0f, 1.0f}},
+      {points[3], color, {1.0f, 1.0f}},
+    }};
+  }
+};
+
 struct UniformBufferObject {
   alignas(16) glm::mat4 model;
   alignas(16) glm::mat4 view;
@@ -138,10 +154,12 @@ private:
     4, 5, 6, 6, 7, 4
   };
 
-  vk::raii::Buffer                     vertexBuffer       = nullptr;
-  vk::raii::DeviceMemory               vertexBufferMemory = nullptr;
-  vk::raii::Buffer                     indexBuffer        = nullptr;
-  vk::raii::DeviceMemory               indexBufferMemory  = nullptr;
+  vk::raii::Buffer                     vertexBuffer         = nullptr;
+  vk::raii::DeviceMemory               vertexBufferMemory   = nullptr;
+  vk::DeviceSize                       vertexBufferCapacity = 0;
+  vk::raii::Buffer                     indexBuffer          = nullptr;
+  vk::raii::DeviceMemory               indexBufferMemory    = nullptr;
+  vk::DeviceSize                       indexBufferCapacity  = 0;
 
   std::vector<vk::raii::Buffer>        uniformBuffers;
   std::vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
@@ -150,7 +168,7 @@ private:
   vk::raii::DescriptorPool             descriptorPool = nullptr;
   std::vector<vk::raii::DescriptorSet> descriptorSets;
 
-  vk::raii::CommandPool                commandPool      = nullptr;
+  vk::raii::CommandPool                commandPool = nullptr;
   std::vector<vk::raii::CommandBuffer> commandBuffers;
 
   std::vector<vk::raii::Semaphore>     presentCompleteSemaphores;
@@ -221,6 +239,7 @@ private:
   void updateVertexBuffer();
   void createIndexBuffer();
   void updateIndexBuffer();
+  void addQuad(Quad const &quad);
   void createUniformBuffers();
   void createDescriptorPool();
   void createDescriptorSets();
