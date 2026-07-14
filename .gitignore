@@ -1,0 +1,6 @@
+build/
+.direnv/
+.cache/
+.envrc
+flake.lock
+compile_commands.json
