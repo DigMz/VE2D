@@ -69,15 +69,19 @@ void Application::initVulkan() {
   createSurface();
   pickPhysicalDevice();
   createLogicalDevice();
+  createCommandPool();
+
   createSwapChain();
   createImageViews();
-  createDescriptorSetLayout();
-  createGraphicsPipeline();
-  createCommandPool();
   createDepthResources();
+
   createTextureImage();
   createTextureImageView();
   createTextureSampler();
+
+  createDescriptorSetLayout();
+  createGraphicsPipeline();
+
   createVertexBuffer();
   createIndexBuffer();
   createCameraUBOs();
@@ -347,7 +351,7 @@ void Application::createDescriptorSetLayout() {
       {
         .binding = 1,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = static_cast<uint32_t>(TEXTURE_PATHS.size()),
+        .descriptorCount = static_cast<uint32_t>(textureImages.size()),
         .stageFlags = vk::ShaderStageFlagBits::eFragment
       },
       {
@@ -1366,6 +1370,7 @@ void Application::mainLoop() {
               .position = {quad_offset, 0.0f, 0.0f},
               .rotation = 0.0f,
               .scale = {1.0f, 1.0f},
+              .color = {(quad_offset) % 3 % 2, (quad_offset+1) % 3 % 2, (quad_offset+2) % 3 % 2, },
               .textureIndex = static_cast<uint32_t>(quad_offset % 2)
             });
             quad_offset++;
