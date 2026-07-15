@@ -364,6 +364,8 @@ void Application::createDescriptorSetLayout() {
 
 void Application::createGraphicsPipeline() {
   vk::raii::ShaderModule shaderModule = createShaderModule(readFile("src/shaders/slang.spv"));
+  // vk::raii::ShaderModule vertshaderModule = createShaderModule(readFile("src/shaders/vert.spv"));
+  // vk::raii::ShaderModule fragshaderModule = createShaderModule(readFile("src/shaders/frag.spv"));
 
   vk::PipelineShaderStageCreateInfo vertShaderStageInfo {
     .stage  = vk::ShaderStageFlagBits::eVertex,
@@ -853,7 +855,11 @@ void Application::updateGPUObjectsBuffer() {
     while (newCapacity < requiredSize) newCapacity *= 2;
   
     device.waitIdle(); // old buffer may still be in flight
-  
+
+    gpuObjectsMemory.unmapMemory();
+    gpuObjectsBuffer.clear();
+    gpuObjectsMemory.clear();
+
     std::tie(gpuObjectsBuffer, gpuObjectsMemory) = createBuffer(
       newCapacity,
       vk::BufferUsageFlagBits::eStorageBuffer,
@@ -883,7 +889,7 @@ void Application::updateGPUObjectsBuffer() {
   }
 
   if (!gpuObjects.empty()) {
-    memcpy(gpuObjectsMapped, &gpuObjects, sizeof(GPUObject) * gpuObjects.size());
+    memcpy(gpuObjectsMapped, gpuObjects.data(), sizeof(GPUObject) * gpuObjects.size());
   }
 }
 
@@ -1347,6 +1353,12 @@ void Application::mainLoop() {
             });
             quad_offset++;
             std::cout << "SizeC: " << gpuObjectsBufferCapacity << "SizeG: " << gpuObjects.size() << std::endl;
+  auto &m = gpuObjects.back().model;
+
+std::cout
+    << m[3].x << " "
+    << m[3].y << " "
+    << m[3].z << '\n';
           }
           break;
         default:

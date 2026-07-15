@@ -169,9 +169,7 @@ private:
   std::vector<vk::raii::DeviceMemory>  cameraUBOsMemory;
   std::vector<void *>                  cameraUBOsMapped;
 
-  std::vector<QuadObject>              quadObjects = {
-    { }
-  };
+  std::vector<QuadObject>              quadObjects = {{}};
   std::vector<GPUObject>               gpuObjects;
   vk::raii::Buffer                     gpuObjectsBuffer = nullptr;
   vk::raii::DeviceMemory               gpuObjectsMemory = nullptr;
