@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.29)
 
-set(PROJECT_NAME "VulkanTutorial")
+set(PROJECT_NAME "VE2D")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(${PROJECT_NAME})

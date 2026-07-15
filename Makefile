@@ -6,7 +6,7 @@ CMAKE_FLAGS := \
 	-DENABLE_CPP20_MODULE=OFF \
 	-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-TARGET := $(BUILD_DIR)/VulkanTutorial/VulkanTutorial
+TARGET := $(BUILD_DIR)/VE2D/VE2D
 
 .PHONY: test conf_debug conf_release configure compile run clean clean_clangd
 
@@ -24,8 +24,10 @@ configure:
 		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 	ln -sf $(BUILD_DIR)/compile_commands.json compile_commands.json
 
-compile:
+compile: build
 	cmake --build $(BUILD_DIR)
+
+build: conf_debug
 
 run:
 	$(TARGET)
