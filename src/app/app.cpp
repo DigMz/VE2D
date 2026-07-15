@@ -210,6 +210,7 @@ void Application::pickPhysicalDevice() {
 
     auto features                 = pd.template getFeatures2<vk::PhysicalDeviceFeatures2,
                                                              vk::PhysicalDeviceVulkan11Features,
+                                                             vk::PhysicalDeviceVulkan12Features,
                                                              vk::PhysicalDeviceVulkan13Features,
                                                              vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
     bool supportsRequiredFeatures = features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
@@ -265,11 +266,13 @@ void Application::createLogicalDevice() {
   // Create a chain of feature structures
   vk::StructureChain<vk::PhysicalDeviceFeatures2,
                      vk::PhysicalDeviceVulkan11Features,
+                     vk::PhysicalDeviceVulkan12Features,
                      vk::PhysicalDeviceVulkan13Features,
                      vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>
     featureChain = {
       {.features = { .samplerAnisotropy = true }},              // vk::PhysicalDeviceFeatures2
       {.shaderDrawParameters = true},                           // Enable shader draw parameters from Vulkan 1.1
+      {.runtimeDescriptorArray = true},                         // Enable runtime descriptor arrays from Vulkan 1.2
       {.synchronization2 = true, .dynamicRendering     = true}, // Enable dynamic rendering from Vulkan 1.3
       {.extendedDynamicState = true}                            // Enable extended dynamic state from the extension
   };
@@ -344,7 +347,7 @@ void Application::createDescriptorSetLayout() {
       {
         .binding = 1,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = 1,
+        .descriptorCount = static_cast<uint32_t>(TEXTURE_PATHS.size()),
         .stageFlags = vk::ShaderStageFlagBits::eFragment
       },
       {
@@ -364,8 +367,6 @@ void Application::createDescriptorSetLayout() {
 
 void Application::createGraphicsPipeline() {
   vk::raii::ShaderModule shaderModule = createShaderModule(readFile("src/shaders/slang.spv"));
-  // vk::raii::ShaderModule vertshaderModule = createShaderModule(readFile("src/shaders/vert.spv"));
-  // vk::raii::ShaderModule fragshaderModule = createShaderModule(readFile("src/shaders/frag.spv"));
 
   vk::PipelineShaderStageCreateInfo vertShaderStageInfo {
     .stage  = vk::ShaderStageFlagBits::eVertex,
@@ -512,37 +513,44 @@ vk::Format Application::findDepthFormat() {
 }
 
 void Application::createTextureImage() {
-  int texWidth, texHeight, texChannels;
-  stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-  vk::DeviceSize imageSize = texWidth * texHeight * 4;
+  for (std::string TEXTURE_PATH : TEXTURE_PATHS) {
+    int texWidth, texHeight, texChannels;
+    stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    vk::DeviceSize imageSize = texWidth * texHeight * 4;
+  
+    if (!pixels) {
+      throw std::runtime_error("failed to load texture image!");
+    }
+  
+    auto [stagingBuffer, stagingBufferMemory] = 
+      createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+  
+    void* data = stagingBufferMemory.mapMemory(0, imageSize);
+    memcpy(data, pixels, imageSize);
+    stagingBufferMemory.unmapMemory();
+  
+    stbi_image_free(pixels);
+  
+    auto [textureImage, textureImageMemory] = createImage(
+      texWidth,
+      texHeight,
+      vk::Format::eR8G8B8A8Srgb,
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+  
+    vk::raii::CommandBuffer commandBuffer = beginSingleTimeCommands();
+    transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    copyBufferToImage(commandBuffer, stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+    transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+    endSingleTimeCommands(std::move(commandBuffer));
 
-  if (!pixels) {
-    throw std::runtime_error("failed to load texture image!");
+    textureImages.push_back(std::move(textureImage));
+    textureImageMemories.push_back(std::move(textureImageMemory));
   }
 
-  auto [stagingBuffer, stagingBufferMemory] = 
-    createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-
-  void* data = stagingBufferMemory.mapMemory(0, imageSize);
-  memcpy(data, pixels, imageSize);
-  stagingBufferMemory.unmapMemory();
-
-  stbi_image_free(pixels);
-
-  std::tie(textureImage, textureImageMemory) = createImage(
-    texWidth,
-    texHeight,
-    vk::Format::eR8G8B8A8Srgb,
-    vk::ImageTiling::eOptimal,
-    vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-    vk::MemoryPropertyFlagBits::eDeviceLocal
-  );
-
-  vk::raii::CommandBuffer commandBuffer = beginSingleTimeCommands();
-  transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-  copyBufferToImage(commandBuffer, stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-  transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-  endSingleTimeCommands(std::move(commandBuffer));
+  std::cout << "Total textures loaded: " << textureImages.size() << std::endl;
 }
 
 void Application::createTextureSampler() {
@@ -560,7 +568,10 @@ void Application::createTextureSampler() {
     .compareOp        = vk::CompareOp::eAlways,
   };
 
-  textureSampler = vk::raii::Sampler(device, samplerInfo);
+  for (int i = 0; i < textureImages.size(); i++) {
+    auto textureSampler = vk::raii::Sampler(device, samplerInfo);
+    textureSamplers.push_back(std::move(textureSampler));
+  }
 }
 
 std::pair<vk::raii::Image, vk::raii::DeviceMemory> Application::createImage(
@@ -590,7 +601,10 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Application::createImage(
 }
 
 void Application::createTextureImageView() {
-  textureImageView = createImageView(*textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
+  for (int i = 0; i < textureImages.size(); i++) {
+    auto textureImageView = createImageView(*textureImages[i], vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
+    textureImageViews.push_back(std::move(textureImageView));
+  }
 }
 
 vk::raii::ImageView Application::createImageView(vk::Image const &image, vk::Format format, vk::ImageAspectFlags aspectFlags) {
@@ -811,7 +825,7 @@ void Application::createCameraUBOs() {
 }
 
 void Application::createGPUObjectsBuffer() {
-  vk::DeviceSize bufferSize = sizeof(GPUObject) * 10;
+  vk::DeviceSize bufferSize = sizeof(GPUObject) * 10000;
   auto [buffer, bufferMem] = createBuffer(
     bufferSize,
     vk::BufferUsageFlagBits::eStorageBuffer,
@@ -842,7 +856,8 @@ void Application::updateGPUObjects() {
   
     gpuObjects.push_back({
       .model = model,
-      .color = object.color
+      .color = object.color,
+      .textureIndex = object.textureIndex,
     });
   }
 }
@@ -903,7 +918,7 @@ void Application::createDescriptorPool() {
       },
       {
         .type            = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+        .descriptorCount = MAX_FRAMES_IN_FLIGHT * static_cast<uint32_t>(textureImageViews.size()),
       },
       {
         .type            = vk::DescriptorType::eStorageBuffer,
@@ -937,41 +952,49 @@ void Application::createDescriptorSets() {
       .offset = 0,
       .range  = sizeof(CameraUBO)
     };
-    vk::DescriptorImageInfo imageInfo {
-      .sampler = textureSampler,
-      .imageView = textureImageView,
-      .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-    };
+    std::vector<vk::DescriptorImageInfo> imageInfos;
+    for (int i = 0; i < textureImages.size(); i++) {
+      imageInfos.push_back(vk::DescriptorImageInfo {
+        .sampler = textureSamplers[i],
+        .imageView = textureImageViews[i],
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+      });
+    }
     vk::DescriptorBufferInfo gpuObjectsBufferInfo {
       .buffer = gpuObjectsBuffer,
       .offset = 0,
       .range  = VK_WHOLE_SIZE
     };
+
+    vk::WriteDescriptorSet cameraBufferWrite {
+      .dstSet          = descriptorSets[i],
+      .dstBinding      = 0,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType  = vk::DescriptorType::eUniformBuffer,
+      .pBufferInfo     = &cameraBufferInfo
+    };
+    vk::WriteDescriptorSet imageWrite {
+      .dstSet          = descriptorSets[i],
+      .dstBinding      = 1,
+      .dstArrayElement = 0,
+      .descriptorCount = static_cast<uint32_t>(imageInfos.size()),
+      .descriptorType  = vk::DescriptorType::eCombinedImageSampler,
+      .pImageInfo      = imageInfos.data()
+    };
+    vk::WriteDescriptorSet gpuObjectsWrite {
+      .dstSet          = descriptorSets[i],
+      .dstBinding      = 2,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType  = vk::DescriptorType::eStorageBuffer,
+      .pBufferInfo     = &gpuObjectsBufferInfo
+    };
+
     std::array<vk::WriteDescriptorSet, 3> descriptorWrites {{
-      {
-        .dstSet          = descriptorSets[i],
-        .dstBinding      = 0,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType  = vk::DescriptorType::eUniformBuffer,
-        .pBufferInfo     = &cameraBufferInfo
-      },
-      {
-        .dstSet          = descriptorSets[i],
-        .dstBinding      = 1,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType  = vk::DescriptorType::eCombinedImageSampler,
-        .pImageInfo      = &imageInfo
-      },
-      {
-        .dstSet          = descriptorSets[i],
-        .dstBinding      = 2,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType  = vk::DescriptorType::eStorageBuffer,
-        .pBufferInfo     = &gpuObjectsBufferInfo
-      }
+      cameraBufferWrite,
+      imageWrite,
+      gpuObjectsWrite,
     }};
     device.updateDescriptorSets(descriptorWrites, {});
   }
@@ -1339,18 +1362,11 @@ void Application::mainLoop() {
             SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
           }
           if (event.key.scancode == SDL_SCANCODE_Q) {
-            // addQuad({
-            //   {{
-            //     {-1.5f - quad_offset, -0.5f,  0.0f},
-            //     {-0.5f - quad_offset, -0.5f,  0.0f},
-            //     {-0.5f - quad_offset,  0.5f,  0.0f},
-            //     {-1.5f - quad_offset,  0.5f,  0.0f}
-            //   }}
-            // });
             quadObjects.push_back({
               .position = {quad_offset, 0.0f, 0.0f},
               .rotation = 0.0f,
-              .scale = {1.0f, 1.0f}
+              .scale = {1.0f, 1.0f},
+              .textureIndex = static_cast<uint32_t>(quad_offset % 2)
             });
             quad_offset++;
             std::cout << "SizeC: " << gpuObjectsBufferCapacity << "SizeG: " << gpuObjects.size() << std::endl;
@@ -1388,6 +1404,10 @@ void Application::processInput(float deltaTime) {
   if (keys[SDL_SCANCODE_D]) cameraPos += right * velocity;
   if (keys[SDL_SCANCODE_SPACE])    cameraPos -= cameraFront * velocity;
   if (keys[SDL_SCANCODE_LCTRL])    cameraPos += cameraFront * velocity;
+
+  if (keys[SDL_SCANCODE_E] && !quadObjects.empty()) {
+    quadObjects[0].position.x -= velocity;
+  }
 }
 
 void Application::cleanup() {
@@ -1409,10 +1429,10 @@ void Application::cleanup() {
   indexBuffer.clear();
   vertexBufferMemory.clear();
   vertexBuffer.clear();
-  textureSampler.clear();
-  textureImageView.clear();
-  textureImageMemory.clear();
-  textureImage.clear();
+  textureSamplers.clear();
+  textureImageViews.clear();
+  textureImageMemories.clear();
+  textureImages.clear();
   depthImageView.clear();
   depthImageMemory.clear();
   depthImage.clear();

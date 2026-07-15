@@ -8,20 +8,27 @@ struct UniformBuffer {
     float4x4 view;
     float4x4 proj;
 };
+[[vk_binding(0)]]
 ConstantBuffer<UniformBuffer> ubo;
 
-Sampler2D texture;
+[[vk_binding(1)]]
+Texture2D textures[];
+[[vk_binding(1)]]
+SamplerState samplerState;
 
 struct ObjectData {
   float4x4 model;
   float3 color;
+  uint32_t textureIndex;
 };
+[[vk_binding(2)]]
 StructuredBuffer<ObjectData> objects;
 
 struct VSOutput {
     float4 pos : SV_Position;
     float3 fragColor;
     float2 fragTexCoord;
+    uint32_t textureIndex;
 };
 
 [shader("vertex")]
@@ -31,10 +38,12 @@ VSOutput vertMain(VSInput input, uint instanceID : SV_InstanceID) {
     output.fragColor = objects[instanceID].color;
     // output.fragColor = input.inColor;
     output.fragTexCoord = input.inTexCoord;
+    output.textureIndex = objects[instanceID].textureIndex;
     return output;
 }
 
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
-  return float4(vertIn.fragColor * texture.Sample(vertIn.fragTexCoord).rgb, 1.0);
+  float4 texColor = textures[vertIn.textureIndex].Sample(samplerState, vertIn.fragTexCoord);
+  return float4(vertIn.fragColor * texColor.rgb, 1.0);
 }

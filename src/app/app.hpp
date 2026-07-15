@@ -35,7 +35,10 @@ import vulkan.hpp;
 
 const uint32_t WIDTH  = 800;
 const uint32_t HEIGHT = 600;
-const std::string TEXTURE_PATH = "assets/textures/texture.jpg";
+const std::vector<std::string> TEXTURE_PATHS = {
+  "assets/textures/texture.jpg",
+  "assets/textures/rockTexture.jpg"
+};
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<char const*> validationLayers = {
@@ -110,6 +113,7 @@ struct QuadObject {
   glm::vec2 scale{1.0f};
 
   glm::vec3 color = {1.0f, 0.0f, 0.5f};
+  uint32_t textureIndex = 0;
 };
 
 struct CameraUBO {
@@ -119,7 +123,8 @@ struct CameraUBO {
 
 struct GPUObject {
   alignas(16) glm::mat4 model;
-  glm::vec3 color;
+  alignas(16) glm::vec3 color;
+  alignas(4) uint32_t textureIndex = 0;
 };
 
 class Application
@@ -153,11 +158,10 @@ private:
   vk::raii::DeviceMemory               depthImageMemory   = nullptr;
   vk::raii::ImageView                  depthImageView     = nullptr;
 
-  vk::raii::Image                      textureImage       = nullptr;
-  vk::raii::DeviceMemory               textureImageMemory = nullptr;
-  vk::raii::ImageView                  textureImageView   = nullptr;
-  vk::raii::Sampler                    textureSampler     = nullptr;
-
+  std::vector<vk::raii::Image>         textureImages;
+  std::vector<vk::raii::DeviceMemory>  textureImageMemories;
+  std::vector<vk::raii::ImageView>     textureImageViews;
+  std::vector<vk::raii::Sampler>       textureSamplers;
 
   vk::raii::Buffer                     vertexBuffer         = nullptr;
   vk::raii::DeviceMemory               vertexBufferMemory   = nullptr;
