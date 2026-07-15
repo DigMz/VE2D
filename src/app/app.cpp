@@ -1353,12 +1353,6 @@ void Application::mainLoop() {
             });
             quad_offset++;
             std::cout << "SizeC: " << gpuObjectsBufferCapacity << "SizeG: " << gpuObjects.size() << std::endl;
-  auto &m = gpuObjects.back().model;
-
-std::cout
-    << m[3].x << " "
-    << m[3].y << " "
-    << m[3].z << '\n';
           }
           break;
         default:
