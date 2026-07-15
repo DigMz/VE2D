@@ -109,7 +109,7 @@ struct QuadObject {
   float rotation = 0.0f; // Around Z
   glm::vec2 scale{1.0f};
 
-  glm::vec3 color{0.0f};
+  glm::vec3 color = {1.0f, 0.0f, 0.5f};
 };
 
 struct CameraUBO {
@@ -119,6 +119,7 @@ struct CameraUBO {
 
 struct GPUObject {
   alignas(16) glm::mat4 model;
+  glm::vec3 color;
 };
 
 class Application

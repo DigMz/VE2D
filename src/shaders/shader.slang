@@ -14,6 +14,7 @@ Sampler2D texture;
 
 struct ObjectData {
   float4x4 model;
+  float3 color;
 };
 StructuredBuffer<ObjectData> objects;
 
@@ -27,7 +28,8 @@ struct VSOutput {
 VSOutput vertMain(VSInput input, uint instanceID : SV_InstanceID) {
     VSOutput output;
     output.pos = mul(ubo.proj, mul(ubo.view, mul(objects[instanceID].model, float4(input.inPosition, 1.0))));
-    output.fragColor = input.inColor;
+    output.fragColor = objects[instanceID].color;
+    // output.fragColor = input.inColor;
     output.fragTexCoord = input.inTexCoord;
     return output;
 }

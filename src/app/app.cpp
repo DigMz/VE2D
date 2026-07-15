@@ -841,7 +841,8 @@ void Application::updateGPUObjects() {
         glm::vec3(object.scale.x, object.scale.y,1));
   
     gpuObjects.push_back({
-      model
+      .model = model,
+      .color = object.color
     });
   }
 }
