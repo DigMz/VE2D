@@ -79,6 +79,16 @@ struct std::hash<Vertex> {
   }
 };
 
+const std::vector<Vertex> vertices = {
+  {{-0.5f, -0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+  {{ 0.5f, -0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+  {{ 0.5f,  0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+  {{-0.5f,  0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+};
+const std::vector<uint32_t> indices = {
+  0, 1, 2, 2, 3, 0,
+};
+
 struct Quad {
   std::array<glm::vec3, 4> points;
   glm::vec3                color = {1.0f, 1.0f, 1.0f};
@@ -94,12 +104,22 @@ struct Quad {
   }
 };
 
-struct UniformBufferObject {
-  alignas(16) glm::mat4 model;
+struct QuadObject {
+  glm::vec3 position{0.0f};
+  float rotation = 0.0f; // Around Z
+  glm::vec2 scale{1.0f};
+
+  glm::vec3 color{0.0f};
+};
+
+struct CameraUBO {
   alignas(16) glm::mat4 view;
   alignas(16) glm::mat4 proj;
 };
 
+struct GPUObject {
+  alignas(16) glm::mat4 model;
+};
 
 class Application
 {
@@ -137,22 +157,6 @@ private:
   vk::raii::ImageView                  textureImageView   = nullptr;
   vk::raii::Sampler                    textureSampler     = nullptr;
 
-  std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f,  0.0f}, {1.0f, 0.0f, 0.0f}, {2.0f, 0.0f}},
-    {{ 0.5f, -0.5f,  0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{ 0.5f,  0.5f,  0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 2.0f}},
-    {{-0.5f,  0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {2.0f, 2.0f}},
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {2.0f, 0.0f}},
-    {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 2.0f}},
-    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {2.0f, 2.0f}},
-  };
-
-  std::vector<uint32_t> indices = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4
-  };
 
   vk::raii::Buffer                     vertexBuffer         = nullptr;
   vk::raii::DeviceMemory               vertexBufferMemory   = nullptr;
@@ -161,9 +165,18 @@ private:
   vk::raii::DeviceMemory               indexBufferMemory    = nullptr;
   vk::DeviceSize                       indexBufferCapacity  = 0;
 
-  std::vector<vk::raii::Buffer>        uniformBuffers;
-  std::vector<vk::raii::DeviceMemory>  uniformBuffersMemory;
-  std::vector<void *>                  uniformBuffersMapped;
+  std::vector<vk::raii::Buffer>        cameraUBOs;
+  std::vector<vk::raii::DeviceMemory>  cameraUBOsMemory;
+  std::vector<void *>                  cameraUBOsMapped;
+
+  std::vector<QuadObject>              quadObjects = {
+    { }
+  };
+  std::vector<GPUObject>               gpuObjects;
+  vk::raii::Buffer                     gpuObjectsBuffer = nullptr;
+  vk::raii::DeviceMemory               gpuObjectsMemory = nullptr;
+  void*                                gpuObjectsMapped = nullptr;
+  vk::DeviceSize                       gpuObjectsBufferCapacity  = 0;
 
   vk::raii::DescriptorPool             descriptorPool = nullptr;
   std::vector<vk::raii::DescriptorSet> descriptorSets;
@@ -240,7 +253,10 @@ private:
   void createIndexBuffer();
   void updateIndexBuffer();
   void addQuad(Quad const &quad);
-  void createUniformBuffers();
+  void createCameraUBOs();
+  void createGPUObjectsBuffer();
+  void updateGPUObjects();
+  void updateGPUObjectsBuffer();
   void createDescriptorPool();
   void createDescriptorSets();
   uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <glm/ext/matrix_float4x4.hpp>
 #include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_core.h>
 
 #define APP_HPP_IMPLEMENTATION
 #include "app.hpp"
@@ -79,7 +80,8 @@ void Application::initVulkan() {
   createTextureSampler();
   createVertexBuffer();
   createIndexBuffer();
-  createUniformBuffers();
+  createCameraUBOs();
+  createGPUObjectsBuffer();
   createDescriptorPool();
   createDescriptorSets();
   createCommandBuffers();
@@ -331,7 +333,7 @@ void Application::createImageViews() {
 }
 
 void Application::createDescriptorSetLayout() {
-  std::array<vk::DescriptorSetLayoutBinding, 2> bindings {
+  std::array<vk::DescriptorSetLayoutBinding, 3> bindings {
     {
       {
         .binding = 0,
@@ -344,6 +346,12 @@ void Application::createDescriptorSetLayout() {
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eFragment
+      },
+      {
+        .binding = 2,
+        .descriptorType = vk::DescriptorType::eStorageBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex
       }
     }
   };
@@ -692,35 +700,35 @@ void Application::createVertexBuffer() {
   vertexBufferCapacity = bufferSize;
 }
 
-void Application::updateVertexBuffer() {
-  vk::DeviceSize requiredSize = sizeof(vertices[0]) * vertices.size();
-  auto [stagingBuffer, stagingBufferMemory] = createBuffer(
-    requiredSize,
-    vk::BufferUsageFlagBits::eTransferSrc,
-    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-  );
-
-  void* data = stagingBufferMemory.mapMemory(0, requiredSize);
-  memcpy(data, vertices.data(), requiredSize);
-  stagingBufferMemory.unmapMemory();
-
-  if (requiredSize > vertexBufferCapacity) {
-    vk::DeviceSize newCapacity = vertexBufferCapacity == 0 ? requiredSize : vertexBufferCapacity;
-    while (newCapacity < requiredSize) newCapacity *= 2;
-
-    device.waitIdle(); // old buffer may still be in flight
-
-    std::tie(vertexBuffer, vertexBufferMemory) = createBuffer(
-      newCapacity,
-      vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-
-    vertexBufferCapacity = newCapacity;
-  }
-
-  copyBuffer(stagingBuffer, vertexBuffer, requiredSize);
-}
+// void Application::updateVertexBuffer() {
+//   vk::DeviceSize requiredSize = sizeof(vertices[0]) * vertices.size();
+//   auto [stagingBuffer, stagingBufferMemory] = createBuffer(
+//     requiredSize,
+//     vk::BufferUsageFlagBits::eTransferSrc,
+//     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+//   );
+//
+//   void* data = stagingBufferMemory.mapMemory(0, requiredSize);
+//   memcpy(data, vertices.data(), requiredSize);
+//   stagingBufferMemory.unmapMemory();
+//
+//   if (requiredSize > vertexBufferCapacity) {
+//     vk::DeviceSize newCapacity = vertexBufferCapacity == 0 ? requiredSize : vertexBufferCapacity;
+//     while (newCapacity < requiredSize) newCapacity *= 2;
+//
+//     device.waitIdle(); // old buffer may still be in flight
+//
+//     std::tie(vertexBuffer, vertexBufferMemory) = createBuffer(
+//       newCapacity,
+//       vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+//       vk::MemoryPropertyFlagBits::eDeviceLocal
+//     );
+//
+//     vertexBufferCapacity = newCapacity;
+//   }
+//
+//   copyBuffer(stagingBuffer, vertexBuffer, requiredSize);
+// }
 
 void Application::createIndexBuffer() {
   vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
@@ -742,66 +750,145 @@ void Application::createIndexBuffer() {
   indexBufferCapacity = bufferSize;
 }
 
-void Application::updateIndexBuffer() {
-  vk::DeviceSize requiredSize = sizeof(indices[0]) * indices.size();
-  auto [stagingBuffer, stagingBufferMemory] = createBuffer(
-    requiredSize,
-    vk::BufferUsageFlagBits::eTransferSrc,
-    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-  );
+// void Application::updateIndexBuffer() {
+//   vk::DeviceSize requiredSize = sizeof(indices[0]) * indices.size();
+//   auto [stagingBuffer, stagingBufferMemory] = createBuffer(
+//     requiredSize,
+//     vk::BufferUsageFlagBits::eTransferSrc,
+//     vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+//   );
+//
+//   void* data = stagingBufferMemory.mapMemory(0, requiredSize);
+//   memcpy(data, indices.data(), requiredSize);
+//   stagingBufferMemory.unmapMemory();
+//
+//   if (requiredSize > indexBufferCapacity) {
+//     vk::DeviceSize newCapacity = indexBufferCapacity == 0 ? requiredSize : indexBufferCapacity;
+//     while (newCapacity < requiredSize) newCapacity *= 2;
+//
+//     device.waitIdle(); // old buffer may still be in flight
+//
+//     std::tie(indexBuffer, indexBufferMemory) = createBuffer(
+//       newCapacity,
+//       vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+//       vk::MemoryPropertyFlagBits::eDeviceLocal
+//     );
+//
+//     indexBufferCapacity = newCapacity;
+//   }
+//
+//   copyBuffer(stagingBuffer, indexBuffer, requiredSize);
+// }
 
-  void* data = stagingBufferMemory.mapMemory(0, requiredSize);
-  memcpy(data, indices.data(), requiredSize);
-  stagingBufferMemory.unmapMemory();
+// void Application::addQuad(Quad const &quad) {
+//   uint32_t base = static_cast<uint32_t>(vertices.size());
+//   auto verts = quad.toVertices();
+//   vertices.insert(vertices.end(), verts.begin(), verts.end());
+//
+//   indices.insert(indices.end(), {
+//     base + 0, base + 1, base + 2,
+//     base + 2, base + 3, base + 0
+//   });
+//
+//   updateVertexBuffer(); 
+//   updateIndexBuffer();
+// }
 
-  if (requiredSize > indexBufferCapacity) {
-    vk::DeviceSize newCapacity = indexBufferCapacity == 0 ? requiredSize : indexBufferCapacity;
-    while (newCapacity < requiredSize) newCapacity *= 2;
-
-    device.waitIdle(); // old buffer may still be in flight
-
-    std::tie(indexBuffer, indexBufferMemory) = createBuffer(
-      newCapacity,
-      vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-      vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-
-    indexBufferCapacity = newCapacity;
-  }
-
-  copyBuffer(stagingBuffer, indexBuffer, requiredSize);
-}
-
-void Application::addQuad(Quad const &quad) {
-  uint32_t base = static_cast<uint32_t>(vertices.size());
-  auto verts = quad.toVertices();
-  vertices.insert(vertices.end(), verts.begin(), verts.end());
-
-  indices.insert(indices.end(), {
-    base + 0, base + 1, base + 2,
-    base + 2, base + 3, base + 0
-  });
-
-  updateVertexBuffer(); 
-  updateIndexBuffer();
-}
-
-void Application::createUniformBuffers() {
+void Application::createCameraUBOs() {
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+    vk::DeviceSize bufferSize = sizeof(CameraUBO);
     auto [buffer, bufferMem] = createBuffer(
       bufferSize, 
       vk::BufferUsageFlagBits::eUniformBuffer,
       vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
     );
-    uniformBuffers.emplace_back(std::move(buffer));
-    uniformBuffersMemory.emplace_back(std::move(bufferMem));
-    uniformBuffersMapped.emplace_back(uniformBuffersMemory.back().mapMemory(0, bufferSize));
+    cameraUBOs.emplace_back(std::move(buffer));
+    cameraUBOsMemory.emplace_back(std::move(bufferMem));
+    cameraUBOsMapped.emplace_back(cameraUBOsMemory.back().mapMemory(0, bufferSize));
+  }
+}
+
+void Application::createGPUObjectsBuffer() {
+  vk::DeviceSize bufferSize = sizeof(GPUObject) * 10;
+  auto [buffer, bufferMem] = createBuffer(
+    bufferSize,
+    vk::BufferUsageFlagBits::eStorageBuffer,
+    vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+  );
+  gpuObjectsBuffer = std::move(buffer);
+  gpuObjectsMemory = std::move(bufferMem);
+  gpuObjectsMapped = gpuObjectsMemory.mapMemory(0, bufferSize);
+  gpuObjectsBufferCapacity = bufferSize;
+}
+
+void Application::updateGPUObjects() {
+  gpuObjects.clear();
+  
+  for (auto const& object : quadObjects) {
+    glm::mat4 model(1.0f);
+  
+    model = glm::translate(model, object.position);
+  
+    model = glm::rotate(
+      model,
+      object.rotation,
+      glm::vec3(0,0,1));
+  
+    model = glm::scale(
+        model,
+        glm::vec3(object.scale.x, object.scale.y,1));
+  
+    gpuObjects.push_back({
+      model
+    });
+  }
+}
+
+void Application::updateGPUObjectsBuffer() {
+  updateGPUObjects();
+  vk::DeviceSize requiredSize = sizeof(GPUObject) * gpuObjects.size();
+
+  if (requiredSize > gpuObjectsBufferCapacity) {
+    vk::DeviceSize newCapacity = gpuObjectsBufferCapacity == 0 ? requiredSize : gpuObjectsBufferCapacity;
+    while (newCapacity < requiredSize) newCapacity *= 2;
+  
+    device.waitIdle(); // old buffer may still be in flight
+  
+    std::tie(gpuObjectsBuffer, gpuObjectsMemory) = createBuffer(
+      newCapacity,
+      vk::BufferUsageFlagBits::eStorageBuffer,
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+    gpuObjectsMapped = gpuObjectsMemory.mapMemory(0, newCapacity);
+    gpuObjectsBufferCapacity = newCapacity;
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      vk::DescriptorBufferInfo gpuObjectsBufferInfo {
+        .buffer = gpuObjectsBuffer,
+        .offset = 0,
+        .range  = VK_WHOLE_SIZE
+      };
+      
+      vk::WriteDescriptorSet write {
+        .dstSet          = descriptorSets[i],
+        .dstBinding      = 2,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = vk::DescriptorType::eStorageBuffer,
+        .pBufferInfo     = &gpuObjectsBufferInfo
+      };
+      
+      device.updateDescriptorSets(write, {});
+    }
+  }
+
+  if (!gpuObjects.empty()) {
+    memcpy(gpuObjectsMapped, &gpuObjects, sizeof(GPUObject) * gpuObjects.size());
   }
 }
 
 void Application::createDescriptorPool() {
-  std::array<vk::DescriptorPoolSize, 2> poolSize {
+  std::array<vk::DescriptorPoolSize, 3> poolSize {
     {
       {
         .type            = vk::DescriptorType::eUniformBuffer,
@@ -809,6 +896,10 @@ void Application::createDescriptorPool() {
       },
       {
         .type            = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+      },
+      {
+        .type            = vk::DescriptorType::eStorageBuffer,
         .descriptorCount = MAX_FRAMES_IN_FLIGHT,
       }
     }
@@ -834,32 +925,45 @@ void Application::createDescriptorSets() {
   descriptorSets = device.allocateDescriptorSets(allocInfo);
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    vk::DescriptorBufferInfo bufferInfo {
-      .buffer = uniformBuffers[i],
+    vk::DescriptorBufferInfo cameraBufferInfo {
+      .buffer = cameraUBOs[i],
       .offset = 0,
-      .range  = sizeof(UniformBufferObject)
+      .range  = sizeof(CameraUBO)
     };
     vk::DescriptorImageInfo imageInfo {
       .sampler = textureSampler,
       .imageView = textureImageView,
       .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
     };
-    std::array<vk::WriteDescriptorSet, 2> descriptorWrites {{
+    vk::DescriptorBufferInfo gpuObjectsBufferInfo {
+      .buffer = gpuObjectsBuffer,
+      .offset = 0,
+      .range  = VK_WHOLE_SIZE
+    };
+    std::array<vk::WriteDescriptorSet, 3> descriptorWrites {{
       {
-      .dstSet          = descriptorSets[i],
-      .dstBinding      = 0,
-      .dstArrayElement = 0,
-      .descriptorCount = 1,
-      .descriptorType  = vk::DescriptorType::eUniformBuffer,
-      .pBufferInfo     = &bufferInfo
+        .dstSet          = descriptorSets[i],
+        .dstBinding      = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = vk::DescriptorType::eUniformBuffer,
+        .pBufferInfo     = &cameraBufferInfo
       },
       {
-      .dstSet          = descriptorSets[i],
-      .dstBinding      = 1,
-      .dstArrayElement = 0,
-      .descriptorCount = 1,
-      .descriptorType  = vk::DescriptorType::eCombinedImageSampler,
-      .pImageInfo      = &imageInfo
+        .dstSet          = descriptorSets[i],
+        .dstBinding      = 1,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = vk::DescriptorType::eCombinedImageSampler,
+        .pImageInfo      = &imageInfo
+      },
+      {
+        .dstSet          = descriptorSets[i],
+        .dstBinding      = 2,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = vk::DescriptorType::eStorageBuffer,
+        .pBufferInfo     = &gpuObjectsBufferInfo
       }
     }};
     device.updateDescriptorSets(descriptorWrites, {});
@@ -985,7 +1089,7 @@ void Application::recordCommandBuffer(uint32_t imageIndex) {
   commandBuffer.bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint32);
 
   commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets[frameIndex], nullptr);
-  commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+  commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), gpuObjects.size(), 0, 0, 0);
 
   commandBuffer.endRendering();
 
@@ -1063,14 +1167,13 @@ void Application::updateUniformBuffer(uint32_t currentImage) {
   auto currentTime = std::chrono::high_resolution_clock::now();
   float time = std::chrono::duration<float>(currentTime - startTime).count();
 
-  UniformBufferObject ubo{};
-  ubo.model = glm::mat4(1.0f);
+  CameraUBO ubo{};
   ubo.view  = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
   ubo.proj  =
-    glm::perspective(glm::radians(45.0f), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 10.0f);
+    glm::perspective(glm::radians(45.0f), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 100.0f);
   ubo.proj[1][1] *= -1;
 
-  memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+  memcpy(cameraUBOsMapped[currentImage], &ubo, sizeof(ubo));
 }
 
 void Application::drawFrame() {
@@ -1192,6 +1295,8 @@ void Application::setupDebugMessenger() {
 }
 
 void Application::mainLoop() {
+  int quad_offset = 0;
+
   lastFrameTime = std::chrono::high_resolution_clock::now();
 
   while (running) {
@@ -1227,14 +1332,21 @@ void Application::mainLoop() {
             SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
           }
           if (event.key.scancode == SDL_SCANCODE_Q) {
-            addQuad({
-              {{
-                { 0.5f, -0.5f,  0.0f},
-                { 1.5f, -0.5f,  0.0f},
-                { 1.5f,  0.5f,  0.0f},
-                { 0.5f,  0.5f,  0.0f}
-              }}
+            // addQuad({
+            //   {{
+            //     {-1.5f - quad_offset, -0.5f,  0.0f},
+            //     {-0.5f - quad_offset, -0.5f,  0.0f},
+            //     {-0.5f - quad_offset,  0.5f,  0.0f},
+            //     {-1.5f - quad_offset,  0.5f,  0.0f}
+            //   }}
+            // });
+            quadObjects.push_back({
+              .position = {quad_offset, 0.0f, 0.0f},
+              .rotation = 0.0f,
+              .scale = {1.0f, 1.0f}
             });
+            quad_offset++;
+            std::cout << "SizeC: " << gpuObjectsBufferCapacity << "SizeG: " << gpuObjects.size() << std::endl;
           }
           break;
         default:
@@ -1248,6 +1360,9 @@ void Application::mainLoop() {
     lastFrameTime = now;
 
     processInput(deltaTime);
+
+    updateGPUObjectsBuffer();
+
     drawFrame();
 	}
 
@@ -1278,9 +1393,11 @@ void Application::cleanup() {
   commandPool.clear();
   descriptorSets.clear();
   descriptorPool.clear();
-  uniformBuffersMapped.clear();
-  uniformBuffersMemory.clear();
-  uniformBuffers.clear();
+  gpuObjectsMemory.clear();
+  gpuObjectsBuffer.clear();
+  cameraUBOsMapped.clear();
+  cameraUBOsMemory.clear();
+  cameraUBOs.clear();
   indexBufferMemory.clear();
   indexBuffer.clear();
   vertexBufferMemory.clear();

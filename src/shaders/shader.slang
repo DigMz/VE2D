@@ -5,11 +5,17 @@ struct VSInput {
 };
 
 struct UniformBuffer {
-    float4x4 model;
     float4x4 view;
     float4x4 proj;
 };
 ConstantBuffer<UniformBuffer> ubo;
+
+Sampler2D texture;
+
+struct ObjectData {
+  float4x4 model;
+};
+StructuredBuffer<ObjectData> objects;
 
 struct VSOutput {
     float4 pos : SV_Position;
@@ -18,15 +24,13 @@ struct VSOutput {
 };
 
 [shader("vertex")]
-VSOutput vertMain(VSInput input) {
+VSOutput vertMain(VSInput input, uint instanceID : SV_InstanceID) {
     VSOutput output;
-    output.pos = mul(ubo.proj, mul(ubo.view, mul(ubo.model, float4(input.inPosition, 1.0))));
+    output.pos = mul(ubo.proj, mul(ubo.view, mul(objects[instanceID].model, float4(input.inPosition, 1.0))));
     output.fragColor = input.inColor;
     output.fragTexCoord = input.inTexCoord;
     return output;
 }
-
-Sampler2D texture;
 
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
