@@ -278,7 +278,7 @@ private:
   );
 
   void createSyncObjects();
-  void updateUniformBuffer(uint32_t currentImage);
+  void updateCameraUBOBuffer(uint32_t currentImage);
   void drawFrame();
 
   [[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const {

@@ -1195,7 +1195,7 @@ void Application::createSyncObjects() {
   }
 }
 
-void Application::updateUniformBuffer(uint32_t currentImage) {
+void Application::updateCameraUBOBuffer(uint32_t currentImage) {
   static auto startTime = std::chrono::high_resolution_clock::now();
 
   auto currentTime = std::chrono::high_resolution_clock::now();
@@ -1227,7 +1227,7 @@ void Application::drawFrame() {
     assert(result == vk::Result::eTimeout || result == vk::Result::eNotReady);
     throw std::runtime_error("failed to aquire swap chain image!");
   }
-  updateUniformBuffer(frameIndex);
+  updateCameraUBOBuffer(frameIndex);
 
   // Only reset the fence if we are submitting work
   device.resetFences(*inFlightFences[frameIndex]);
