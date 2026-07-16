@@ -11,6 +11,8 @@ struct UniformBuffer {
 [[vk_binding(0)]]
 ConstantBuffer<UniformBuffer> ubo;
 
+#pragma warning(disable : 39001)
+// Combined Image Sampler used, shared binding is intentional
 [[vk_binding(1)]]
 Texture2D textures[];
 [[vk_binding(1)]]
