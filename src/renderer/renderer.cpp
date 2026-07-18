@@ -1,0 +1,623 @@
+#include "renderer.hpp" 
+#include "utils/utils.hpp"
+
+#include <stb_image.h>
+#include <cstdint>
+
+#if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
+#	include <vulkan/vulkan_raii.hpp>
+#else
+import vulkan.hpp;
+#endif
+
+void Renderer::init() {
+  createTextureImage();
+  createTextureImageView();
+  createTextureSampler();
+  createDescriptorSetLayout();
+  createGraphicsPipeline();
+  createVertexBuffer();
+  createIndexBuffer();
+  createGPUObjectsBuffer();
+  createDescriptorPool();
+  createDescriptorSets();
+}
+
+void Renderer::createTextureImage() {
+  for (std::string TEXTURE_PATH : TEXTURE_PATHS) {
+    int texWidth, texHeight, texChannels;
+    stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    vk::DeviceSize imageSize = texWidth * texHeight * 4;
+  
+    if (!pixels) {
+      throw std::runtime_error("failed to load texture image!");
+    }
+  
+    auto [stagingBuffer, stagingBufferMemory] = 
+      vk_util::createBuffer( device,
+        physicalDevice,
+        imageSize, 
+        vk::BufferUsageFlagBits::eTransferSrc, 
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+      );
+  
+    void* data = stagingBufferMemory.mapMemory(0, imageSize);
+    memcpy(data, pixels, imageSize);
+    stagingBufferMemory.unmapMemory();
+  
+    stbi_image_free(pixels);
+  
+    auto [textureImage, textureImageMemory] = vk_util::createImage(
+      device,
+      physicalDevice,
+      texWidth,
+      texHeight,
+      vk::Format::eR8G8B8A8Srgb,
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+  
+    vk::raii::CommandBuffer commandBuffer = vk_util::beginSingleTimeCommands(device, commandPool);
+    vk_util::transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    vk_util::copyBufferToImage(commandBuffer, stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+    vk_util::transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+    vk_util::endSingleTimeCommands(queue, std::move(commandBuffer));
+
+    textureImages.push_back(std::move(textureImage));
+    textureImageMemories.push_back(std::move(textureImageMemory));
+  }
+
+  std::cout << "Total textures loaded: " << textureImages.size() << std::endl;
+}
+
+void Renderer::createTextureImageView() {
+  for (int i = 0; i < textureImages.size(); i++) {
+    auto textureImageView = vk_util::createImageView(device, *textureImages[i], vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
+    textureImageViews.push_back(std::move(textureImageView));
+  }
+}
+
+void Renderer::createTextureSampler() {
+  vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
+  vk::SamplerCreateInfo samplerInfo {
+    .magFilter        = vk::Filter::eLinear,
+    .minFilter        = vk::Filter::eLinear,
+    .mipmapMode       = vk::SamplerMipmapMode::eLinear,
+    .addressModeU     = vk::SamplerAddressMode::eRepeat,
+    .addressModeV     = vk::SamplerAddressMode::eRepeat,
+    .addressModeW     = vk::SamplerAddressMode::eRepeat,
+    .anisotropyEnable = vk::True,
+    .maxAnisotropy    = properties.limits.maxSamplerAnisotropy,
+    .compareEnable    = vk::False,
+    .compareOp        = vk::CompareOp::eAlways,
+  };
+
+  for (int i = 0; i < textureImages.size(); i++) {
+    auto textureSampler = vk::raii::Sampler(device, samplerInfo);
+    textureSamplers.push_back(std::move(textureSampler));
+  }
+}
+
+void Renderer::createDescriptorSetLayout() {
+  std::array<vk::DescriptorSetLayoutBinding, 3> bindings {
+    {
+      {
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex
+      },
+      {
+        .binding = 1,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = static_cast<uint32_t>(textureImages.size()),
+        .stageFlags = vk::ShaderStageFlagBits::eFragment
+      },
+      {
+        .binding = 2,
+        .descriptorType = vk::DescriptorType::eStorageBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex
+      }
+    }
+  };
+  vk::DescriptorSetLayoutCreateInfo layoutInfo {
+    .bindingCount = static_cast<uint32_t>(bindings.size()),
+    .pBindings    = bindings.data()
+  };
+  descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutInfo);
+}
+
+void Renderer::createGraphicsPipeline() {
+  vk::raii::ShaderModule shaderModule = createShaderModule(readFile("src/shaders/slang.spv"));
+
+  vk::PipelineShaderStageCreateInfo vertShaderStageInfo {
+    .stage  = vk::ShaderStageFlagBits::eVertex,
+    .module = shaderModule,
+    .pName  = "vertMain",
+  };
+  vk::PipelineShaderStageCreateInfo fragShaderStageInfo {
+    .stage  = vk::ShaderStageFlagBits::eFragment,
+    .module = shaderModule,
+    .pName  = "fragMain",
+  };
+  vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+  auto bindingDescription = Vertex::getBindingDescription();
+  auto attributeDescriptions = Vertex::getAttributeDescriptions();
+  vk::PipelineVertexInputStateCreateInfo vertexInputInfo {
+    .vertexBindingDescriptionCount   = 1,
+    .pVertexBindingDescriptions      = &bindingDescription,
+    .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
+    .pVertexAttributeDescriptions    = attributeDescriptions.data()
+  };
+  vk::PipelineInputAssemblyStateCreateInfo inputAssembly { .topology = vk::PrimitiveTopology::eTriangleList };
+  vk::PipelineViewportStateCreateInfo viewportState { .viewportCount = 1, .scissorCount = 1 };
+
+  vk::PipelineRasterizationStateCreateInfo rasterizer {
+    .depthClampEnable        = vk::False,
+    .rasterizerDiscardEnable = vk::False,
+    .polygonMode             = vk::PolygonMode::eFill,
+    .cullMode                = vk::CullModeFlagBits::eBack,
+    .frontFace               = vk::FrontFace::eCounterClockwise,
+    .depthBiasEnable         = vk::False,
+    .lineWidth               = 1.0f
+  };
+
+  vk::PipelineMultisampleStateCreateInfo multisampling {
+    .rasterizationSamples = vk::SampleCountFlagBits::e1,
+    .sampleShadingEnable  = vk::False
+  };
+
+  vk::PipelineDepthStencilStateCreateInfo depthStencil {
+    .depthTestEnable       = vk::True,
+    .depthWriteEnable      = vk::True,
+    .depthCompareOp        = vk::CompareOp::eLess,
+    .depthBoundsTestEnable = vk::False,
+    .stencilTestEnable     = vk::False,
+  };
+
+  vk::PipelineColorBlendAttachmentState colorBlendAttachment {
+    .blendEnable    = vk::False,
+    .colorWriteMask = vk::ColorComponentFlagBits::eR |
+                      vk::ColorComponentFlagBits::eG | 
+                      vk::ColorComponentFlagBits::eB | 
+                      vk::ColorComponentFlagBits::eA
+  };
+
+  vk::PipelineColorBlendStateCreateInfo colorBlending {
+    .logicOpEnable = vk::False,
+    .logicOp = vk::LogicOp::eCopy,
+    .attachmentCount = 1,
+    .pAttachments = &colorBlendAttachment
+  };
+
+  std::vector<vk::DynamicState>      dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
+	vk::PipelineDynamicStateCreateInfo dynamicState {
+    .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+    .pDynamicStates = dynamicStates.data()
+  };
+
+  vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
+    .setLayoutCount         = 1,
+    .pSetLayouts            = &*descriptorSetLayout,
+    .pushConstantRangeCount = 0
+  };
+  pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+
+  vk::Format depthFormat = vk_util::findDepthFormat(device, physicalDevice);
+
+  vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
+    {
+      .stageCount          = 2,
+      .pStages             = shaderStages,
+      .pVertexInputState   = &vertexInputInfo,
+      .pInputAssemblyState = &inputAssembly,
+      .pViewportState      = &viewportState,
+      .pRasterizationState = &rasterizer,
+      .pMultisampleState   = &multisampling,
+      .pDepthStencilState  = &depthStencil,
+      .pColorBlendState    = &colorBlending,
+      .pDynamicState       = &dynamicState,
+      .layout              = pipelineLayout,
+      .renderPass          = nullptr
+    },
+    {
+      .colorAttachmentCount = 1,
+      .pColorAttachmentFormats = &swapChainSurfaceFormat.format,
+      .depthAttachmentFormat = depthFormat,
+    }
+  };
+
+  graphicsPipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+}
+
+void Renderer::createVertexBuffer() {
+  vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+  auto [stagingBuffer, stagingBufferMemory] =
+    vk_util::createBuffer(
+      device,
+      physicalDevice,
+      bufferSize,
+      vk::BufferUsageFlagBits::eTransferSrc,
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+
+  void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
+  memcpy(dataStaging, vertices.data(), bufferSize);
+  stagingBufferMemory.unmapMemory();
+
+  std::tie(vertexBuffer, vertexBufferMemory) = 
+    vk_util::createBuffer(
+      device,
+      physicalDevice,
+      bufferSize,
+      vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+  vk_util::copyBuffer(
+    device,
+    commandPool,
+    queue,
+    stagingBuffer, 
+    vertexBuffer,
+    bufferSize
+  );
+
+  vertexBufferCapacity = bufferSize;
+}
+
+void Renderer::createIndexBuffer() {
+  vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+  auto [stagingBuffer, stagingBufferMemory] =
+    vk_util::createBuffer(
+      device,
+      physicalDevice,
+      bufferSize,
+      vk::BufferUsageFlagBits::eTransferSrc,
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+
+  void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
+  memcpy(dataStaging, indices.data(), (size_t) bufferSize);
+  stagingBufferMemory.unmapMemory();
+
+  std::tie(indexBuffer, indexBufferMemory) = 
+    vk_util::createBuffer(
+      device,
+      physicalDevice,
+      bufferSize,
+      vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+  vk_util::copyBuffer(
+    device,
+    commandPool,
+    queue,
+    stagingBuffer, 
+    indexBuffer,
+    bufferSize
+  );
+
+  indexBufferCapacity = bufferSize;
+}
+
+void Renderer::createGPUObjectsBuffer() {
+  vk::DeviceSize bufferSize = sizeof(GPUObject) * 10000;
+  auto [buffer, bufferMem] = 
+    vk_util::createBuffer(
+      device,
+      physicalDevice,
+      bufferSize,
+      vk::BufferUsageFlagBits::eStorageBuffer,
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+  gpuObjectsBuffer = std::move(buffer);
+  gpuObjectsMemory = std::move(bufferMem);
+  gpuObjectsMapped = gpuObjectsMemory.mapMemory(0, bufferSize);
+  gpuObjectsBufferCapacity = bufferSize;
+}
+
+void Renderer::updateGPUObjects() {
+  gpuObjects.clear();
+  
+  for (auto const& object : quadObjects) {
+    glm::mat4 model(1.0f);
+  
+    model = glm::translate(model, object.position);
+  
+    model = glm::rotate(
+      model,
+      object.rotation,
+      glm::vec3(0,0,1));
+  
+    model = glm::scale(
+        model,
+        glm::vec3(object.scale.x, object.scale.y,1));
+  
+    gpuObjects.push_back({
+      .model = model,
+      .color = object.color,
+      .textureIndex = object.textureIndex,
+    });
+  }
+}
+
+void Renderer::updateGPUObjectsBuffer() {
+  updateGPUObjects();
+  vk::DeviceSize requiredSize = sizeof(GPUObject) * gpuObjects.size();
+
+  if (requiredSize > gpuObjectsBufferCapacity) {
+    vk::DeviceSize newCapacity = gpuObjectsBufferCapacity == 0 ? requiredSize : gpuObjectsBufferCapacity;
+    while (newCapacity < requiredSize) newCapacity *= 2;
+  
+    device.waitIdle(); // old buffer may still be in flight
+
+    gpuObjectsMemory.unmapMemory();
+    gpuObjectsBuffer.clear();
+    gpuObjectsMemory.clear();
+
+    std::tie(gpuObjectsBuffer, gpuObjectsMemory) = 
+      vk_util::createBuffer(
+        device,
+        physicalDevice,
+        newCapacity,
+        vk::BufferUsageFlagBits::eStorageBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+      );
+    gpuObjectsMapped = gpuObjectsMemory.mapMemory(0, newCapacity);
+    gpuObjectsBufferCapacity = newCapacity;
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      vk::DescriptorBufferInfo gpuObjectsBufferInfo {
+        .buffer = gpuObjectsBuffer,
+        .offset = 0,
+        .range  = VK_WHOLE_SIZE
+      };
+      
+      vk::WriteDescriptorSet write {
+        .dstSet          = descriptorSets[i],
+        .dstBinding      = 2,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType  = vk::DescriptorType::eStorageBuffer,
+        .pBufferInfo     = &gpuObjectsBufferInfo
+      };
+      
+      device.updateDescriptorSets(write, {});
+    }
+  }
+
+  if (!gpuObjects.empty()) {
+    memcpy(gpuObjectsMapped, gpuObjects.data(), sizeof(GPUObject) * gpuObjects.size());
+  }
+}
+
+void Renderer::createDescriptorPool() {
+  std::array<vk::DescriptorPoolSize, 3> poolSize {
+    {
+      {
+        .type            = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = (uint32_t) MAX_FRAMES_IN_FLIGHT,
+      },
+      {
+        .type            = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = (uint32_t) MAX_FRAMES_IN_FLIGHT * static_cast<uint32_t>(textureImageViews.size()),
+      },
+      {
+        .type            = vk::DescriptorType::eStorageBuffer,
+        .descriptorCount = (uint32_t) MAX_FRAMES_IN_FLIGHT,
+      }
+    }
+  };
+  vk::DescriptorPoolCreateInfo poolInfo {
+    .flags         = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+    .maxSets       = (uint32_t) MAX_FRAMES_IN_FLIGHT,
+    .poolSizeCount = static_cast<uint32_t>(poolSize.size()),
+    .pPoolSizes    = poolSize.data()
+  };
+
+  descriptorPool = vk::raii::DescriptorPool(device, poolInfo);
+}
+
+void Renderer::createDescriptorSets() {
+  std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, *descriptorSetLayout);
+  vk::DescriptorSetAllocateInfo        allocInfo {
+    .descriptorPool     = descriptorPool,
+    .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
+    .pSetLayouts        = layouts.data()
+  };
+
+  descriptorSets = device.allocateDescriptorSets(allocInfo);
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vk::DescriptorBufferInfo cameraBufferInfo {
+      .buffer = cameraUBOs[i],
+      .offset = 0,
+      .range  = sizeof(CameraUBO)
+    };
+    std::vector<vk::DescriptorImageInfo> imageInfos;
+    for (int i = 0; i < textureImages.size(); i++) {
+      imageInfos.push_back(vk::DescriptorImageInfo {
+        .sampler = textureSamplers[i],
+        .imageView = textureImageViews[i],
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+      });
+    }
+    vk::DescriptorBufferInfo gpuObjectsBufferInfo {
+      .buffer = gpuObjectsBuffer,
+      .offset = 0,
+      .range  = VK_WHOLE_SIZE
+    };
+
+    vk::WriteDescriptorSet cameraBufferWrite {
+      .dstSet          = descriptorSets[i],
+      .dstBinding      = 0,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType  = vk::DescriptorType::eUniformBuffer,
+      .pBufferInfo     = &cameraBufferInfo
+    };
+    vk::WriteDescriptorSet imageWrite {
+      .dstSet          = descriptorSets[i],
+      .dstBinding      = 1,
+      .dstArrayElement = 0,
+      .descriptorCount = static_cast<uint32_t>(imageInfos.size()),
+      .descriptorType  = vk::DescriptorType::eCombinedImageSampler,
+      .pImageInfo      = imageInfos.data()
+    };
+    vk::WriteDescriptorSet gpuObjectsWrite {
+      .dstSet          = descriptorSets[i],
+      .dstBinding      = 2,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType  = vk::DescriptorType::eStorageBuffer,
+      .pBufferInfo     = &gpuObjectsBufferInfo
+    };
+
+    std::array<vk::WriteDescriptorSet, 3> descriptorWrites {{
+      cameraBufferWrite,
+      imageWrite,
+      gpuObjectsWrite,
+    }};
+    device.updateDescriptorSets(descriptorWrites, {});
+  }
+}
+
+void Renderer::transition_image_layout(
+  vk::raii::CommandBuffer& commandBuffer,
+  vk::Image               image,
+  vk::ImageLayout         old_layout,
+  vk::ImageLayout         new_layout,
+  vk::AccessFlags2        src_access_mask,
+  vk::AccessFlags2        dst_access_mask,
+  vk::PipelineStageFlags2 src_stage_mask,
+  vk::PipelineStageFlags2 dst_stage_mask,
+  vk::ImageAspectFlags    image_aspect_flags
+) {
+  vk::ImageMemoryBarrier2 barrier = {
+		.srcStageMask        = src_stage_mask,
+		.srcAccessMask       = src_access_mask,
+		.dstStageMask        = dst_stage_mask,
+		.dstAccessMask       = dst_access_mask,
+		.oldLayout           = old_layout,
+		.newLayout           = new_layout,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .image               = image,
+		.subresourceRange    = {
+		  .aspectMask     = image_aspect_flags,
+		  .baseMipLevel   = 0,
+		  .levelCount     = 1,
+		  .baseArrayLayer = 0,
+		  .layerCount     = 1
+    }
+  };
+	vk::DependencyInfo dependencyInfo = {
+		.dependencyFlags         = {},
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers    = &barrier
+  };
+  commandBuffer.pipelineBarrier2(dependencyInfo);
+}
+
+void Renderer::recordFrame(
+  vk::raii::CommandBuffer& commandBuffer,
+  vk::Image swapChainImage,
+  vk::Extent2D swapChainExtent,
+  vk::raii::ImageView& swapChainImageView,
+  vk::raii::Image& depthImage,
+  vk::raii::ImageView& depthImageView,
+  uint32_t frameIndex,
+  unsigned int imageIndex
+) {
+  updateGPUObjectsBuffer();
+
+  commandBuffer.begin({});
+
+  // Before strating render, transition the swapchain image to vk::ImageLayout::eColorAttachmentOptimal
+  transition_image_layout(
+    commandBuffer,
+    swapChainImage,
+    vk::ImageLayout::eUndefined,
+    vk::ImageLayout::eColorAttachmentOptimal,
+    {},
+    vk::AccessFlagBits2::eColorAttachmentWrite,
+    vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+    vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+    vk::ImageAspectFlagBits::eColor
+  );
+
+  transition_image_layout(
+    commandBuffer,
+    *depthImage,
+    vk::ImageLayout::eUndefined,
+    vk::ImageLayout::eDepthAttachmentOptimal,
+    vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+    vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+    vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+    vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+    vk::ImageAspectFlagBits::eDepth
+  );
+
+  vk::ClearValue              clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+  vk::ClearValue              clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
+  vk::RenderingAttachmentInfo attachmentInfo = {
+    .imageView   = swapChainImageView,
+    .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+    .loadOp      = vk::AttachmentLoadOp::eClear,
+    .storeOp     = vk::AttachmentStoreOp::eStore,
+    .clearValue  = clearColor
+  };
+  vk::RenderingAttachmentInfo depthAttachmentInfo = {
+    .imageView   = depthImageView,
+    .imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+    .loadOp      = vk::AttachmentLoadOp::eClear,
+    .storeOp     = vk::AttachmentStoreOp::eDontCare,
+    .clearValue  = clearDepth
+  };
+
+  vk::RenderingInfo renderingInfo = {
+    .renderArea = {
+      .offset = {0, 0},
+      .extent = swapChainExtent
+    },
+    .layerCount           = 1,
+    .colorAttachmentCount = 1,
+    .pColorAttachments    = &attachmentInfo,
+    .pDepthAttachment     = &depthAttachmentInfo,
+  };
+
+  commandBuffer.beginRendering(renderingInfo);
+
+  commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+  commandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
+  commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
+  commandBuffer.bindVertexBuffers(0, *vertexBuffer, {0});
+  commandBuffer.bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint32);
+
+  commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets[frameIndex], nullptr);
+  commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), gpuObjects.size(), 0, 0, 0);
+
+  commandBuffer.endRendering();
+
+  // After rendering, transition the swapchain image to vk::ImageLayout::ePresentSrcKHR
+  transition_image_layout(
+    commandBuffer,
+    swapChainImage,
+    vk::ImageLayout::eColorAttachmentOptimal,
+    vk::ImageLayout::ePresentSrcKHR,
+    vk::AccessFlagBits2::eColorAttachmentWrite,
+    {},
+    vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+    vk::PipelineStageFlagBits2::eBottomOfPipe,
+    vk::ImageAspectFlagBits::eColor
+  );
+
+  commandBuffer.end();
+}
