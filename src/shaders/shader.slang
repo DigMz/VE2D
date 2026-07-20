@@ -11,20 +11,20 @@ struct UniformBuffer {
 [[vk_binding(0)]]
 ConstantBuffer<UniformBuffer> ubo;
 
-#pragma warning(disable : 39001)
-// Combined Image Sampler used, shared binding is intentional
-[[vk_binding(1)]]
-Texture2D textures[];
-[[vk_binding(1)]]
-SamplerState samplerState;
-
 struct ObjectData {
   float4x4 model;
   float3 color;
   uint32_t textureIndex;
 };
-[[vk_binding(2)]]
+[[vk_binding(1)]]
 StructuredBuffer<ObjectData> objects;
+
+#pragma warning(disable : 39001)
+// Combined Image Sampler used, shared binding is intentional
+[[vk_binding(2)]]
+Texture2D textures[];
+[[vk_binding(2)]]
+SamplerState samplerState;
 
 struct VSOutput {
     float4 pos : SV_Position;

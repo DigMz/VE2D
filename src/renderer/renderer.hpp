@@ -75,10 +75,11 @@ public:
 private:
   const std::vector<std::string> TEXTURE_PATHS = {
     "assets/textures/texture.jpg",
-    "assets/textures/rockTexture.jpg"
   };
 
   int MAX_FRAMES_IN_FLIGHT;
+  const uint32_t MAX_TEXTURES = 256;
+
   vk::raii::Device&         device;
   vk::raii::PhysicalDevice& physicalDevice;
   vk::raii::Queue&          queue;
@@ -114,9 +115,14 @@ private:
 
   void init();
 
-  void createTextureImage();
-  void createTextureImageView();
-  void createTextureSampler();
+  std::pair<vk::raii::Image, vk::raii::DeviceMemory> createTextureImage(std::string texturePath);
+  vk::raii::ImageView createTextureImageView(vk::raii::Image& textureImage);
+  vk::raii::Sampler   createTextureSampler();
+  
+  void createTextureImages();
+  void createTextureImageViews();
+  void createTextureSamplers();
+
   void createDescriptorSetLayout();
   void createGraphicsPipeline();
   void createVertexBuffer();
@@ -126,6 +132,8 @@ private:
   void updateGPUObjectsBuffer();
   void createDescriptorPool();
   void createDescriptorSets();
+
+  void addTexture(std::string texturePath);
 
   void transition_image_layout(
     vk::raii::CommandBuffer& commandBuffer,

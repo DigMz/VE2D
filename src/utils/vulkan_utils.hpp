@@ -47,21 +47,6 @@ const std::vector<uint32_t> indices = {
   0, 1, 2, 2, 3, 0,
 };
 
-struct Quad {
-  std::array<glm::vec3, 4> points;
-  glm::vec3                color = {1.0f, 1.0f, 1.0f};
-  uint32_t                 texIndex = 0;
-
-  std::array<Vertex, 4> toVertices() const {
-    return {{
-      {points[0], color, {1.0f, 0.0f}},
-      {points[1], color, {0.0f, 0.0f}},
-      {points[2], color, {0.0f, 1.0f}},
-      {points[3], color, {1.0f, 1.0f}},
-    }};
-  }
-};
-
 struct QuadObject {
   glm::vec3 position{0.0f};
   float rotation = 0.0f; // Around Z

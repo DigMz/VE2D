@@ -1,5 +1,6 @@
 #include "renderer.hpp" 
 #include "utils/utils.hpp"
+#include "vulkan/vulkan.hpp"
 
 #include <stb_image.h>
 #include <cstdint>
@@ -11,9 +12,9 @@ import vulkan.hpp;
 #endif
 
 void Renderer::init() {
-  createTextureImage();
-  createTextureImageView();
-  createTextureSampler();
+  createTextureImages();
+  createTextureImageViews();
+  createTextureSamplers();
   createDescriptorSetLayout();
   createGraphicsPipeline();
   createVertexBuffer();
@@ -21,64 +22,60 @@ void Renderer::init() {
   createGPUObjectsBuffer();
   createDescriptorPool();
   createDescriptorSets();
+
+  addTexture("assets/textures/rockTexture.jpg");
 }
 
-void Renderer::createTextureImage() {
-  for (std::string TEXTURE_PATH : TEXTURE_PATHS) {
-    int texWidth, texHeight, texChannels;
-    stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    vk::DeviceSize imageSize = texWidth * texHeight * 4;
+std::pair<vk::raii::Image, vk::raii::DeviceMemory> Renderer::createTextureImage(std::string texturePath) {
+  int texWidth, texHeight, texChannels;
+  stbi_uc *pixels = stbi_load(texturePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+  vk::DeviceSize imageSize = texWidth * texHeight * 4;
   
-    if (!pixels) {
-      throw std::runtime_error("failed to load texture image!");
-    }
+  if (!pixels) {
+    throw std::runtime_error("failed to load texture image!");
+  }
   
-    auto [stagingBuffer, stagingBufferMemory] = 
-      vk_util::createBuffer( device,
-        physicalDevice,
-        imageSize, 
-        vk::BufferUsageFlagBits::eTransferSrc, 
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-      );
-  
-    void* data = stagingBufferMemory.mapMemory(0, imageSize);
-    memcpy(data, pixels, imageSize);
-    stagingBufferMemory.unmapMemory();
-  
-    stbi_image_free(pixels);
-  
-    auto [textureImage, textureImageMemory] = vk_util::createImage(
+  auto [stagingBuffer, stagingBufferMemory] = 
+    vk_util::createBuffer(
       device,
       physicalDevice,
-      texWidth,
-      texHeight,
-      vk::Format::eR8G8B8A8Srgb,
-      vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-      vk::MemoryPropertyFlagBits::eDeviceLocal
+      imageSize, 
+      vk::BufferUsageFlagBits::eTransferSrc, 
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
     );
   
-    vk::raii::CommandBuffer commandBuffer = vk_util::beginSingleTimeCommands(device, commandPool);
-    vk_util::transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-    vk_util::copyBufferToImage(commandBuffer, stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-    vk_util::transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-    vk_util::endSingleTimeCommands(queue, std::move(commandBuffer));
+  void* data = stagingBufferMemory.mapMemory(0, imageSize);
+  memcpy(data, pixels, imageSize);
+  stagingBufferMemory.unmapMemory();
+  
+  stbi_image_free(pixels);
+  
+  auto [textureImage, textureImageMemory] = vk_util::createImage(
+    device,
+    physicalDevice,
+    texWidth,
+    texHeight,
+    vk::Format::eR8G8B8A8Srgb,
+    vk::ImageTiling::eOptimal,
+    vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+    vk::MemoryPropertyFlagBits::eDeviceLocal
+  );
+  
+  vk::raii::CommandBuffer commandBuffer = vk_util::beginSingleTimeCommands(device, commandPool);
+  vk_util::transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+  vk_util::copyBufferToImage(commandBuffer, stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+  vk_util::transitionImageLayout(commandBuffer, textureImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+  vk_util::endSingleTimeCommands(queue, std::move(commandBuffer));
 
-    textureImages.push_back(std::move(textureImage));
-    textureImageMemories.push_back(std::move(textureImageMemory));
-  }
-
-  std::cout << "Total textures loaded: " << textureImages.size() << std::endl;
+  return {std::move(textureImage), std::move(textureImageMemory)};
 }
 
-void Renderer::createTextureImageView() {
-  for (int i = 0; i < textureImages.size(); i++) {
-    auto textureImageView = vk_util::createImageView(device, *textureImages[i], vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
-    textureImageViews.push_back(std::move(textureImageView));
-  }
+vk::raii::ImageView Renderer::createTextureImageView(vk::raii::Image& textureImage) {
+  auto textureImageView = vk_util::createImageView(device, *textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
+  return std::move(textureImageView);
 }
 
-void Renderer::createTextureSampler() {
+vk::raii::Sampler Renderer::createTextureSampler() {
   vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
   vk::SamplerCreateInfo samplerInfo {
     .magFilter        = vk::Filter::eLinear,
@@ -93,13 +90,43 @@ void Renderer::createTextureSampler() {
     .compareOp        = vk::CompareOp::eAlways,
   };
 
+  auto textureSampler = vk::raii::Sampler(device, samplerInfo);
+  return std::move(textureSampler);
+}
+
+void Renderer::createTextureImages() {
+  for (std::string TEXTURE_PATH : TEXTURE_PATHS) {
+    auto [textureImage, textureImageMemory] = createTextureImage(TEXTURE_PATH);
+    textureImages.push_back(std::move(textureImage));
+    textureImageMemories.push_back(std::move(textureImageMemory));
+  }
+
+  std::cout << "Total textures loaded: " << textureImages.size() << std::endl;
+}
+
+void Renderer::createTextureImageViews() {
   for (int i = 0; i < textureImages.size(); i++) {
-    auto textureSampler = vk::raii::Sampler(device, samplerInfo);
-    textureSamplers.push_back(std::move(textureSampler));
+    textureImageViews.push_back(std::move(createTextureImageView(textureImages[i])));
+  }
+}
+
+void Renderer::createTextureSamplers() {
+  for (int i = 0; i < textureImages.size(); i++) {
+    textureSamplers.push_back(std::move(createTextureSampler()));
   }
 }
 
 void Renderer::createDescriptorSetLayout() {
+  vk::DescriptorBindingFlags bindingFlags[3] = {
+    {},
+    {},
+    vk::DescriptorBindingFlagBits::eVariableDescriptorCount | vk::DescriptorBindingFlagBits::eUpdateAfterBind,
+  };
+  vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsInfo {
+    .bindingCount = 3,
+    .pBindingFlags = bindingFlags
+  };
+
   std::array<vk::DescriptorSetLayoutBinding, 3> bindings {
     {
       {
@@ -110,19 +137,21 @@ void Renderer::createDescriptorSetLayout() {
       },
       {
         .binding = 1,
-        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = static_cast<uint32_t>(textureImages.size()),
-        .stageFlags = vk::ShaderStageFlagBits::eFragment
-      },
-      {
-        .binding = 2,
         .descriptorType = vk::DescriptorType::eStorageBuffer,
         .descriptorCount = 1,
         .stageFlags = vk::ShaderStageFlagBits::eVertex
-      }
+      },
+      {
+        .binding = 2,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = MAX_TEXTURES,
+        .stageFlags = vk::ShaderStageFlagBits::eFragment
+      },
     }
   };
   vk::DescriptorSetLayoutCreateInfo layoutInfo {
+    .pNext        = &flagsInfo,
+    .flags        = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool,
     .bindingCount = static_cast<uint32_t>(bindings.size()),
     .pBindings    = bindings.data()
   };
@@ -382,7 +411,7 @@ void Renderer::updateGPUObjectsBuffer() {
       
       vk::WriteDescriptorSet write {
         .dstSet          = descriptorSets[i],
-        .dstBinding      = 2,
+        .dstBinding      = 1,
         .dstArrayElement = 0,
         .descriptorCount = 1,
         .descriptorType  = vk::DescriptorType::eStorageBuffer,
@@ -406,17 +435,18 @@ void Renderer::createDescriptorPool() {
         .descriptorCount = (uint32_t) MAX_FRAMES_IN_FLIGHT,
       },
       {
-        .type            = vk::DescriptorType::eCombinedImageSampler,
-        .descriptorCount = (uint32_t) MAX_FRAMES_IN_FLIGHT * static_cast<uint32_t>(textureImageViews.size()),
-      },
-      {
         .type            = vk::DescriptorType::eStorageBuffer,
         .descriptorCount = (uint32_t) MAX_FRAMES_IN_FLIGHT,
-      }
+      },
+      {
+        .type            = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = (uint32_t) MAX_FRAMES_IN_FLIGHT * MAX_TEXTURES,
+      },
     }
   };
   vk::DescriptorPoolCreateInfo poolInfo {
-    .flags         = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+    .flags         = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet |
+                     vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind,
     .maxSets       = (uint32_t) MAX_FRAMES_IN_FLIGHT,
     .poolSizeCount = static_cast<uint32_t>(poolSize.size()),
     .pPoolSizes    = poolSize.data()
@@ -427,7 +457,16 @@ void Renderer::createDescriptorPool() {
 
 void Renderer::createDescriptorSets() {
   std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, *descriptorSetLayout);
+
+  std::vector<uint32_t> variableCounts(MAX_FRAMES_IN_FLIGHT, MAX_TEXTURES);
+
+  vk::DescriptorSetVariableDescriptorCountAllocateInfo variableCountInfo {
+    .descriptorSetCount = static_cast<uint32_t>(variableCounts.size()),
+    .pDescriptorCounts = variableCounts.data()
+  };
+
   vk::DescriptorSetAllocateInfo        allocInfo {
+    .pNext              = &variableCountInfo,
     .descriptorPool     = descriptorPool,
     .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
     .pSetLayouts        = layouts.data()
@@ -463,27 +502,27 @@ void Renderer::createDescriptorSets() {
       .descriptorType  = vk::DescriptorType::eUniformBuffer,
       .pBufferInfo     = &cameraBufferInfo
     };
-    vk::WriteDescriptorSet imageWrite {
-      .dstSet          = descriptorSets[i],
-      .dstBinding      = 1,
-      .dstArrayElement = 0,
-      .descriptorCount = static_cast<uint32_t>(imageInfos.size()),
-      .descriptorType  = vk::DescriptorType::eCombinedImageSampler,
-      .pImageInfo      = imageInfos.data()
-    };
     vk::WriteDescriptorSet gpuObjectsWrite {
       .dstSet          = descriptorSets[i],
-      .dstBinding      = 2,
+      .dstBinding      = 1,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType  = vk::DescriptorType::eStorageBuffer,
       .pBufferInfo     = &gpuObjectsBufferInfo
     };
+    vk::WriteDescriptorSet imageWrite {
+      .dstSet          = descriptorSets[i],
+      .dstBinding      = 2,
+      .dstArrayElement = 0,
+      .descriptorCount = static_cast<uint32_t>(imageInfos.size()),
+      .descriptorType  = vk::DescriptorType::eCombinedImageSampler,
+      .pImageInfo      = imageInfos.data()
+    };
 
     std::array<vk::WriteDescriptorSet, 3> descriptorWrites {{
       cameraBufferWrite,
-      imageWrite,
       gpuObjectsWrite,
+      imageWrite,
     }};
     device.updateDescriptorSets(descriptorWrites, {});
   }
@@ -620,4 +659,36 @@ void Renderer::recordFrame(
   );
 
   commandBuffer.end();
+}
+
+void Renderer::addTexture(std::string texturePath) {
+  auto [textureImage, textureImageMemory] = createTextureImage(texturePath);
+  auto textureImageView = createTextureImageView(textureImage);
+  auto textureSampler = createTextureSampler();
+
+  uint32_t textureIndex = textureImages.size();
+  textureImages.push_back(std::move(textureImage));
+  textureImageMemories.push_back(std::move(textureImageMemory));
+  textureImageViews.push_back(std::move(textureImageView));
+  textureSamplers.push_back(std::move(textureSampler));
+
+  // Update descriptor sets for all frames
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vk::DescriptorImageInfo imageInfo {
+      .sampler = *textureSamplers[textureIndex],
+      .imageView = *textureImageViews[textureIndex],
+      .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+    };
+    
+    vk::WriteDescriptorSet write {
+      .dstSet = descriptorSets[i],
+      .dstBinding = 2,
+      .dstArrayElement = textureIndex,  // Write to specific index
+      .descriptorCount = 1,
+      .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+      .pImageInfo = &imageInfo
+    };
+    
+    device.updateDescriptorSets(write, {});
+  }
 }

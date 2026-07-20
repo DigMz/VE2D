@@ -215,6 +215,8 @@ void Application::pickPhysicalDevice() {
                                                              vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
     bool supportsRequiredFeatures = features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
                                     features.template get<vk::PhysicalDeviceVulkan11Features>().shaderDrawParameters &&
+                                    features.template get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingVariableDescriptorCount &&
+                                    features.template get<vk::PhysicalDeviceVulkan12Features>().descriptorBindingSampledImageUpdateAfterBind &&
                                     features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
                                     features.template get<vk::PhysicalDeviceVulkan13Features>().synchronization2 &&
                                     features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
@@ -272,7 +274,11 @@ void Application::createLogicalDevice() {
     featureChain = {
       {.features = { .samplerAnisotropy = true }},              // vk::PhysicalDeviceFeatures2
       {.shaderDrawParameters = true},                           // Enable shader draw parameters from Vulkan 1.1
-      {.runtimeDescriptorArray = true},                         // Enable runtime descriptor arrays from Vulkan 1.2
+      { // Vulkan 1.2 features
+       .descriptorBindingSampledImageUpdateAfterBind = true,    // Enable
+       .descriptorBindingVariableDescriptorCount = true,        // Enab
+       .runtimeDescriptorArray = true,                          // Enable runtime descriptor arrays from Vulkan 1.2
+      },
       {.synchronization2 = true, .dynamicRendering     = true}, // Enable dynamic rendering from Vulkan 1.3
       {.extendedDynamicState = true}                            // Enable extended dynamic state from the extension
   };
