@@ -1,6 +1,5 @@
 struct VSInput {
     float3 inPosition;
-    float3 inColor;
     float2 inTexCoord;
 };
 
@@ -30,8 +29,7 @@ struct VSOutput {
     float4 pos : SV_Position;
     float3 fragColor;
     float2 fragTexCoord;
-    uint32_t textureIndex;
-};
+    uint32_t textureIndex; };
 
 [shader("vertex")]
 VSOutput vertMain(VSInput input, uint instanceID : SV_InstanceID) {

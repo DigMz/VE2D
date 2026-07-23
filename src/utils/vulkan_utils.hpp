@@ -8,7 +8,6 @@
 
 struct Vertex {
   glm::vec3 pos;
-  glm::vec3 color;
   glm::vec2 texCoord;
 
   static vk::VertexInputBindingDescription getBindingDescription() {
@@ -19,29 +18,28 @@ struct Vertex {
     };
   }
 
-  static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions() {
+  static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions() {
 		return {{{.location = 0, .binding = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, pos)},
-		         {.location = 1, .binding = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, color)},
-		         {.location = 2, .binding = 0, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, texCoord)}}};
+		         {.location = 1, .binding = 0, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, texCoord)}}};
 	}
 
   bool operator==(const Vertex& other) const {
-    return pos == other.pos && color == other.color && texCoord == other.texCoord; 
+    return pos == other.pos && texCoord == other.texCoord; 
   }
 };
 
 template<>
 struct std::hash<Vertex> {
   size_t operator()(Vertex const& vertex) const noexcept {
-    return ((std::hash<glm::vec3>()(vertex.pos) ^ (std::hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (std::hash<glm::vec2>()(vertex.texCoord) << 1);
+    return (std::hash<glm::vec3>()(vertex.pos) >> 1) ^ (std::hash<glm::vec2>()(vertex.texCoord) << 1);
   }
 };
 
 const std::vector<Vertex> vertices = {
-  {{-0.5f, -0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-  {{ 0.5f, -0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-  {{ 0.5f,  0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-  {{-0.5f,  0.5f,  0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+  {{-0.5f, -0.5f,  0.0f}, {1.0f, 0.0f}},
+  {{ 0.5f, -0.5f,  0.0f}, {0.0f, 0.0f}},
+  {{ 0.5f,  0.5f,  0.0f}, {0.0f, 1.0f}},
+  {{-0.5f,  0.5f,  0.0f}, {1.0f, 1.0f}},
 };
 const std::vector<uint32_t> indices = {
   0, 1, 2, 2, 3, 0,
