@@ -42,7 +42,7 @@ public:
     indexBuffer.clear();
     vertexBufferMemory.clear();
     vertexBuffer.clear();
-    textureSamplers.clear();
+    textureSampler.clear();
     textureImageViews.clear();
     textureImageMemories.clear();
     textureImages.clear();
@@ -78,7 +78,7 @@ private:
   };
 
   int MAX_FRAMES_IN_FLIGHT;
-  const uint32_t MAX_TEXTURES = 256;
+  const uint32_t MAX_TEXTURES = 512;
 
   vk::raii::Device&         device;
   vk::raii::PhysicalDevice& physicalDevice;
@@ -87,14 +87,14 @@ private:
   vk::SurfaceFormatKHR      swapChainSurfaceFormat;
   std::vector<vk::raii::Buffer>&        cameraUBOs;
 
-  vk::raii::DescriptorSetLayout        descriptorSetLayout = nullptr;
-  vk::raii::PipelineLayout             pipelineLayout      = nullptr;
-  vk::raii::Pipeline                   graphicsPipeline    = nullptr;
+  vk::raii::DescriptorSetLayout        descriptorSetLayout  = nullptr;
+  vk::raii::PipelineLayout             pipelineLayout       = nullptr;
+  vk::raii::Pipeline                   graphicsPipeline     = nullptr;
 
   std::vector<vk::raii::Image>         textureImages;
   std::vector<vk::raii::DeviceMemory>  textureImageMemories;
   std::vector<vk::raii::ImageView>     textureImageViews;
-  std::vector<vk::raii::Sampler>       textureSamplers;
+  vk::raii::Sampler                    textureSampler       = nullptr;
 
   vk::raii::Buffer                     vertexBuffer         = nullptr;
   vk::raii::DeviceMemory               vertexBufferMemory   = nullptr;

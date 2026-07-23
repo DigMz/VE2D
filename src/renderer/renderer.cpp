@@ -111,9 +111,7 @@ void Renderer::createTextureImageViews() {
 }
 
 void Renderer::createTextureSamplers() {
-  for (int i = 0; i < textureImages.size(); i++) {
-    textureSamplers.push_back(std::move(createTextureSampler()));
-  }
+  textureSampler = createTextureSampler();
 }
 
 void Renderer::createDescriptorSetLayout() {
@@ -483,7 +481,7 @@ void Renderer::createDescriptorSets() {
     std::vector<vk::DescriptorImageInfo> imageInfos;
     for (int i = 0; i < textureImages.size(); i++) {
       imageInfos.push_back(vk::DescriptorImageInfo {
-        .sampler = textureSamplers[i],
+        .sampler = textureSampler,
         .imageView = textureImageViews[i],
         .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
       });
@@ -664,18 +662,16 @@ void Renderer::recordFrame(
 void Renderer::addTexture(std::string texturePath) {
   auto [textureImage, textureImageMemory] = createTextureImage(texturePath);
   auto textureImageView = createTextureImageView(textureImage);
-  auto textureSampler = createTextureSampler();
 
   uint32_t textureIndex = textureImages.size();
   textureImages.push_back(std::move(textureImage));
   textureImageMemories.push_back(std::move(textureImageMemory));
   textureImageViews.push_back(std::move(textureImageView));
-  textureSamplers.push_back(std::move(textureSampler));
 
   // Update descriptor sets for all frames
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     vk::DescriptorImageInfo imageInfo {
-      .sampler = *textureSamplers[textureIndex],
+      .sampler = *textureSampler,
       .imageView = *textureImageViews[textureIndex],
       .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
     };
