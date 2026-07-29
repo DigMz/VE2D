@@ -14,12 +14,9 @@ public:
     glm::vec3 position,
     glm::vec2 scale,
     glm::vec1 rotation
-  ) :
-    Node(std::move(children)),
-    position(position),
-    scale(scale),
-    rotation(rotation)
-  { }
+  );
+
+  void process(float deltaTime) override;
 
   glm::vec3 position;
   glm::vec2 scale;

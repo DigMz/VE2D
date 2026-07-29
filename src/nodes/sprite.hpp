@@ -1,7 +1,6 @@
 #pragma once
 
 #include "node2D.hpp"
-#include <iostream>
 #include <cstdint>
 
 class Sprite : public Node2D {
@@ -11,17 +10,7 @@ public:
     glm::vec3 position,
     glm::vec2 scale,
     glm::vec1 rotation
-  ) :
-    Node2D(
-      std::move(children),
-      position,
-      scale,
-      rotation
-    ),
-    lastPosition(position),
-    lastScale(scale),
-    lastRotation(rotation)
-  { }
+  );
 
   Sprite (
     std::vector<std::unique_ptr<Node>> children,
@@ -29,50 +18,17 @@ public:
     glm::vec2 scale,
     glm::vec1 rotation,
     std::string texturePath
-  ) :
-    Node2D(
-      std::move(children),
-      position,
-      scale,
-      rotation
-    ),
-    lastPosition(position),
-    lastScale(scale),
-    lastRotation(rotation),
-    texturePath(texturePath),
-    lastTexturePath(texturePath)
-  { }
+  );
 
-  void _init() override {
-    std::cout << "Init CanvasItem: " << texturePath << std::endl;
-  }
-
-  void _ready() override {
-    std::cout << "Ready CanvasItem: " << texturePath << std::endl;
-  }
-
-  void _process(float deltaTime) override {
-    position.y += 0.1 * deltaTime;
-
-
-    if (
-      lastPosition != position ||
-      lastScale != scale ||
-      lastRotation != rotation ||
-      lastTexturePath != texturePath
-    ) {
-      dirty = true;
-    }
-    lastPosition = position;
-    lastScale = scale;
-    lastRotation = rotation;
-    lastTexturePath = texturePath;
-  }
+  void _init() override;
+  void _ready() override;
+  void _process(float deltaTime) override;
 
   std::string texturePath = "assets/textures/texture.jpg";
   uint32_t textureId;
   bool dirty = false;
   int quadIndex = -1;
+
 private:
   glm::vec3 lastPosition;
   glm::vec2 lastScale;
