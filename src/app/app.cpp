@@ -1,3 +1,6 @@
+#include <glm/ext/vector_float3.hpp>
+#include <memory>
+#include <vector>
 #include <vulkan/vulkan.hpp>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_scancode.h>
@@ -11,6 +14,9 @@
 #include "app.hpp"
 
 #include "utils/vulkan_utils.hpp"
+#include "renderer/renderer.hpp"
+#include "nodes/node.hpp"
+#include "nodes/sprite.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -21,6 +27,7 @@ void Application::run() {
 
 	initWindow();
 	initVulkan();
+  initScene();
 	mainLoop();
 	cleanup();
 }
@@ -75,16 +82,6 @@ void Application::initVulkan() {
 
   createCameraUBOs();
   
-  renderer.emplace(
-    MAX_FRAMES_IN_FLIGHT,
-    device,
-    physicalDevice,
-    queue,
-    commandPool,
-    swapChainSurfaceFormat,
-    cameraUBOs
-  );
-
 
 }
 
@@ -453,7 +450,7 @@ void Application::drawFrame() {
   commandBuffers[frameIndex].reset();
   
   // recordCommandBuffer(imageIndex);
-  renderer->recordFrame(
+  currentScene->recordFrame(
     commandBuffers[frameIndex],
     swapChainImages[imageIndex],
     swapChainExtent,
@@ -557,8 +554,31 @@ void Application::setupDebugMessenger() {
   debugMessenger = instance.createDebugUtilsMessengerEXT( debugUtilsMessengerCreateInfoEXT );
 }
 
+void Application::initScene() {
+  Node root {{}};
+  root.children.push_back(std::unique_ptr<Node>( new Sprite(
+    std::vector<std::unique_ptr<Node>> {},
+    glm::vec3 {0.0f, 0.0f, 0.0f},
+    glm::vec2 {1.0f, 1.0f},
+    glm::vec1 {0.0f}
+  )));
+
+  currentScene.reset(new Scene(
+    std::make_unique<Node>(std::move(root)),
+    std::make_unique<Renderer>(
+      MAX_FRAMES_IN_FLIGHT,
+      device,
+      physicalDevice,
+      queue,
+      commandPool,
+      swapChainSurfaceFormat,
+      cameraUBOs
+    )
+  ));
+}
+
 void Application::mainLoop() {
-  int quad_offset = 0;
+  int quad_offset = 1;
 
   lastFrameTime = std::chrono::high_resolution_clock::now();
 
@@ -595,15 +615,14 @@ void Application::mainLoop() {
             SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
           }
           if (event.key.scancode == SDL_SCANCODE_Q) {
-            renderer->addQuadObject({
-              .position = {quad_offset, 0.0f, 0.0f},
-              .rotation = 0.0f,
-              .scale = {1.0f, 1.0f},
-              .color = {(quad_offset) % 3 % 2, (quad_offset+1) % 3 % 2, (quad_offset+2) % 3 % 2, },
-              .textureIndex = static_cast<uint32_t>(quad_offset % 2)
-            });
+            currentScene->addSprite(std::unique_ptr<Sprite>( new Sprite(
+              std::vector<std::unique_ptr<Node>> {},
+              glm::vec3 {static_cast<float>(quad_offset), 0.0f, 0.0f},
+              glm::vec2 {1.0f, 1.0f},
+              glm::vec1 {0.0f}
+            )));
             quad_offset++;
-            renderer->printDebug();
+            currentScene->printDebug();
           }
           break;
         default:
@@ -619,6 +638,8 @@ void Application::mainLoop() {
     processInput(deltaTime);
 
     // updateGPUObjectsBuffer();
+
+    currentScene->process(deltaTime);
 
     drawFrame();
 	}
@@ -641,7 +662,9 @@ void Application::processInput(float deltaTime) {
 }
 
 void Application::cleanup() {
-  renderer->clear();
+  currentScene.reset();
+  // delete currentScene.release();
+
   // Explicitly destroy all Vulkan objects before quitting SDL
   // destroys the Wayland display underneath them
   inFlightFences.clear();

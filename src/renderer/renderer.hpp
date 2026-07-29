@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <cstdint>
+#include <iostream>
 #include <vector>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
@@ -11,7 +12,6 @@ import vulkan.hpp;
 #endif
 
 #include "utils/vulkan_utils.hpp"
-
 
 class Renderer {
 public:
@@ -35,7 +35,7 @@ public:
     init();
   }
 
-  void clear() {
+  ~Renderer() {
     descriptorSets.clear();
     descriptorPool.clear();
     indexBufferMemory.clear();
@@ -64,13 +64,19 @@ public:
     unsigned int imageIndex
   );
 
-  void addQuadObject(QuadObject x) {
+  int addQuadObject(QuadObject x) {
     quadObjects.push_back(x);
+    return quadObjects.size()-1;
+  }
+  void updateQuadObject(QuadObject x, int index) {
+    quadObjects[index] = x;
   }
 
   void printDebug() {
     std::cout << "SizeC: " << gpuObjectsBufferCapacity << "SizeG: " << gpuObjects.size() << std::endl;
   }
+
+  int addTexture(std::string texturePath);
 
 private:
   const std::vector<std::string> TEXTURE_PATHS = {
@@ -132,8 +138,6 @@ private:
   void updateGPUObjectsBuffer();
   void createDescriptorPool();
   void createDescriptorSets();
-
-  void addTexture(std::string texturePath);
 
   void transition_image_layout(
     vk::raii::CommandBuffer& commandBuffer,

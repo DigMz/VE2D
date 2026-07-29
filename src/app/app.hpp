@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <cstdint>
 #include <iostream>
-#include <optional>
+#include <memory>
 #include <vector>
 #include <chrono>
 
@@ -31,7 +31,7 @@ import vulkan.hpp;
 #include <stb_image.h>
 #include <tiny_obj_loader.h>
 
-#include "renderer/renderer.hpp"
+#include "scenes/scene.hpp"
 
 const uint32_t WIDTH  = 800;
 const uint32_t HEIGHT = 600;
@@ -57,8 +57,6 @@ public:
 	void run();
 
 private:
-  std::optional<Renderer> renderer;
-
   bool                                 running        = true;
 
 	SDL_Window                           *window        = nullptr;
@@ -111,6 +109,8 @@ private:
     vk::KHRSwapchainExtensionName
   };
 
+  std::unique_ptr<Scene> currentScene = nullptr;
+
   static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT       severity,
                                                         vk::DebugUtilsMessageTypeFlagsEXT              type,
                                                         const vk::DebugUtilsMessengerCallbackDataEXT * pCallbackData,
@@ -122,8 +122,9 @@ private:
   };
 
 	void initWindow();
-
 	void initVulkan();
+  void initScene();
+
   void createInstance();
   void setupDebugMessenger();
   void createSurface();

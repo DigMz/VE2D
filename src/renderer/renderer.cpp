@@ -22,8 +22,6 @@ void Renderer::init() {
   createGPUObjectsBuffer();
   createDescriptorPool();
   createDescriptorSets();
-
-  addTexture("assets/textures/rockTexture.jpg");
 }
 
 std::pair<vk::raii::Image, vk::raii::DeviceMemory> Renderer::createTextureImage(std::string texturePath) {
@@ -659,7 +657,7 @@ void Renderer::recordFrame(
   commandBuffer.end();
 }
 
-void Renderer::addTexture(std::string texturePath) {
+int Renderer::addTexture(std::string texturePath) {
   auto [textureImage, textureImageMemory] = createTextureImage(texturePath);
   auto textureImageView = createTextureImageView(textureImage);
 
@@ -687,4 +685,6 @@ void Renderer::addTexture(std::string texturePath) {
     
     device.updateDescriptorSets(write, {});
   }
+
+  return textureIndex;
 }

@@ -82,6 +82,7 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/app/app.cpp
     src/renderer/renderer.cpp
+    src/scenes/scene.cpp
 )
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 
