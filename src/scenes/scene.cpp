@@ -23,9 +23,9 @@ void Scene::pushSpriteDataToRenderer(Sprite &sprite) {
   sprite.textureId = textureIdRef[sprite.texturePath];
 
   sprite.quadIndex = renderer->addQuadObject({
-    .position = {sprite.position.x, sprite.position.y, sprite.position.z},
-    .rotation = sprite.rotation.x,
-    .scale = {sprite.scale.x, sprite.scale.y},
+    .position = {-sprite.get_global_position().x, sprite.get_global_position().y, -sprite.get_global_position().z},
+    .rotation = sprite.get_global_rotation().x,
+    .scale = {sprite.get_global_scale().x, sprite.get_global_scale().y},
     .color = {1.0f, 1.0f, 1.0f},
     .textureIndex = static_cast<uint32_t>(sprite.textureId)
   });
@@ -38,16 +38,16 @@ void Scene::updateSpriteDataOnRenderer(Sprite &sprite) {
   }
 
   renderer->updateQuadObject({
-    .position = {sprite.position.x, sprite.position.y, sprite.position.z},
-    .rotation = sprite.rotation.x,
-    .scale = {sprite.scale.x, sprite.scale.y},
+    .position = {-sprite.get_global_position().x, sprite.get_global_position().y, -sprite.get_global_position().z},
+    .rotation = sprite.get_global_rotation().x,
+    .scale = {sprite.get_global_scale().x, sprite.get_global_scale().y},
     .color = {1.0f, 1.0f, 1.0f},
     .textureIndex = static_cast<uint32_t>(sprite.textureId)
   }, sprite.quadIndex);
 }
 
 void Scene::init() {
-  std::cout << "Initializing Scene" << std::endl;
+  std::cout << "Initializing Scene Tree" << std::endl;
 
   // Go through every node, add unique textures to the renderer, and map its id
   funcTree( [&](std::unique_ptr<Node> &node) -> void {

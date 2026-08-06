@@ -197,18 +197,24 @@ void Renderer::createGraphicsPipeline() {
 
   vk::PipelineDepthStencilStateCreateInfo depthStencil {
     .depthTestEnable       = vk::True,
-    .depthWriteEnable      = vk::True,
+    .depthWriteEnable      = vk::False,
     .depthCompareOp        = vk::CompareOp::eLess,
     .depthBoundsTestEnable = vk::False,
     .stencilTestEnable     = vk::False,
   };
 
   vk::PipelineColorBlendAttachmentState colorBlendAttachment {
-    .blendEnable    = vk::False,
-    .colorWriteMask = vk::ColorComponentFlagBits::eR |
-                      vk::ColorComponentFlagBits::eG | 
-                      vk::ColorComponentFlagBits::eB | 
-                      vk::ColorComponentFlagBits::eA
+    .blendEnable         = vk::True,
+    .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+    .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+    .colorBlendOp        = vk::BlendOp::eAdd,
+    .srcAlphaBlendFactor = vk::BlendFactor::eOne,
+    .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+    .alphaBlendOp        = vk::BlendOp::eAdd,
+    .colorWriteMask      = vk::ColorComponentFlagBits::eR |
+                           vk::ColorComponentFlagBits::eG | 
+                           vk::ColorComponentFlagBits::eB | 
+                           vk::ColorComponentFlagBits::eA
   };
 
   vk::PipelineColorBlendStateCreateInfo colorBlending {

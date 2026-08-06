@@ -11,10 +11,18 @@ Node::Node(
   children(std::move(children))
 {}
 
+Node::Node(
+  std::string name,
+  std::vector<std::unique_ptr<Node>> children
+) :
+  name(name),
+  children(std::move(children))
+{}
 
 void Node::init() {
   _init();
   for (std::unique_ptr<Node> &child : children) {
+    child->parent = this;
     child->init();
   }
 }

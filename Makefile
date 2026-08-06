@@ -24,7 +24,7 @@ configure:
 		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 	ln -sf $(BUILD_DIR)/compile_commands.json compile_commands.json
 
-compile: build
+compile:
 	cmake --build $(BUILD_DIR)
 
 build: conf_debug

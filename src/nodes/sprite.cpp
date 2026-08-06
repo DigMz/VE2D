@@ -5,13 +5,15 @@ Sprite::Sprite (
   std::vector<std::unique_ptr<Node>> children,
   glm::vec3 position,
   glm::vec2 scale,
-  glm::vec1 rotation
+  glm::vec1 rotation,
+  std::string name
 ) :
   Node2D(
     std::move(children),
     position,
     scale,
-    rotation
+    rotation,
+    name
   ),
   lastPosition(position),
   lastScale(scale),
@@ -23,13 +25,15 @@ Sprite::Sprite (
   glm::vec3 position,
   glm::vec2 scale,
   glm::vec1 rotation,
-  std::string texturePath
+  std::string texturePath,
+  std::string name
 ) :
   Node2D(
     std::move(children),
     position,
     scale,
-    rotation
+    rotation,
+    name
   ),
   lastPosition(position),
   lastScale(scale),

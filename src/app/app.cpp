@@ -1,4 +1,7 @@
+#include "nodes/node2D.hpp"
+#include <glm/ext/vector_float2.hpp>
 #include <glm/ext/vector_float3.hpp>
+#include <glm/fwd.hpp>
 #include <memory>
 #include <vector>
 #include <vulkan/vulkan.hpp>
@@ -555,16 +558,27 @@ void Application::setupDebugMessenger() {
 }
 
 void Application::initScene() {
-  Node root {{}};
+  Sprite root = Sprite(
+    {},
+    glm::vec3(0.0f),
+    glm::vec2(1.0f),
+    glm::vec1(0.0f),
+    "assets/textures/circle.png",
+    "Root Sprite"
+  );
   root.children.push_back(std::unique_ptr<Node>( new Sprite(
     std::vector<std::unique_ptr<Node>> {},
-    glm::vec3 {0.0f, 0.0f, 0.0f},
-    glm::vec2 {1.0f, 1.0f},
-    glm::vec1 {0.0f}
+    glm::vec3(1.0f, 0.0f, 1.0f),
+    glm::vec2(1.0f),
+    glm::vec1(2.0f),
+    "assets/textures/circle.png",
+    "Child Sprite"
   )));
 
+  std::cout << "Root Children: " << root.children.size() << std::endl;
+
   currentScene.reset(new Scene(
-    std::make_unique<Node>(std::move(root)),
+    std::make_unique<Sprite>(std::move(root)),
     std::make_unique<Renderer>(
       MAX_FRAMES_IN_FLIGHT,
       device,

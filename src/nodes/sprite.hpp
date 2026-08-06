@@ -9,7 +9,8 @@ public:
     std::vector<std::unique_ptr<Node>> children,
     glm::vec3 position,
     glm::vec2 scale,
-    glm::vec1 rotation
+    glm::vec1 rotation,
+    std::string name = "Sprite"
   );
 
   Sprite (
@@ -17,7 +18,8 @@ public:
     glm::vec3 position,
     glm::vec2 scale,
     glm::vec1 rotation,
-    std::string texturePath
+    std::string texturePath,
+    std::string name = "Sprite"
   );
 
   void _init() override;
