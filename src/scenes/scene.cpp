@@ -24,7 +24,7 @@ void Scene::pushSpriteDataToRenderer(Sprite &sprite) {
 
   sprite.quadIndex = renderer->addQuadObject({
     .position = {sprite.position.x, sprite.position.y, sprite.position.z},
-    .rotation = sprite.rotation.x,
+    .rotation = sprite.rotation,
     .scale = {sprite.scale.x, sprite.scale.y},
     .color = {1.0f, 1.0f, 1.0f},
     .textureIndex = static_cast<uint32_t>(sprite.textureId)
@@ -34,12 +34,12 @@ void Scene::pushSpriteDataToRenderer(Sprite &sprite) {
 void Scene::updateSpriteDataOnRenderer(Sprite &sprite) {
   if (!textureIdRef.contains(sprite.texturePath)) {
     textureIdRef[sprite.texturePath] = renderer->addTexture(sprite.texturePath);
-    sprite.textureId = textureIdRef[sprite.texturePath];
   }
+  sprite.textureId = textureIdRef[sprite.texturePath];
 
   renderer->updateQuadObject({
     .position = {sprite.position.x, sprite.position.y, sprite.position.z},
-    .rotation = sprite.rotation.x,
+    .rotation = sprite.rotation,
     .scale = {sprite.scale.x, sprite.scale.y},
     .color = {1.0f, 1.0f, 1.0f},
     .textureIndex = static_cast<uint32_t>(sprite.textureId)
@@ -51,10 +51,9 @@ void Scene::init() {
 
   // Go through every node, add unique textures to the renderer, and map its id
   funcTree( [&](std::unique_ptr<Node> &node) -> void {
-    try {
-      Sprite &sprite = dynamic_cast<Sprite&>(*node);
-      pushSpriteDataToRenderer(sprite);
-    } catch (const std::bad_cast&) { }
+    if (Sprite *sprite = dynamic_cast<Sprite*>(node.get())) {
+      pushSpriteDataToRenderer(*sprite);
+    }
   });
 
   for (const auto& [tex, id] : textureIdRef) {
@@ -68,14 +67,13 @@ void Scene::init() {
 void Scene::process(float deltaTime) {
   root->process(deltaTime);
 
-  // Go through every node, add unique textures to the renderer, and map its id
+  // Push any sprites that changed this frame to the renderer
   funcTree( [&](std::unique_ptr<Node> &node) -> void {
-    try {
-      Sprite &sprite = dynamic_cast<Sprite&>(*node);
-      if (sprite.dirty) {
-        updateSpriteDataOnRenderer(sprite);
-      }
-    } catch (const std::bad_cast&) { }
+    Sprite *sprite = dynamic_cast<Sprite*>(node.get());
+    if (sprite && sprite->dirty) {
+      updateSpriteDataOnRenderer(*sprite);
+      sprite->dirty = false;
+    }
   });
 }
 
@@ -99,12 +97,6 @@ void Scene::recordFrame(
    frameIndex,
    imageIndex
   );
-}
-
-template<std::derived_from<Node> T, class... Args>
-void Scene::addNodeToRoot(Args&&... args) {
-  auto child = std::make_unique<T>(std::forward<Args>(args)...);
-  root->children.push_back(std::move(child));
 }
 
 void Scene::addSprite(std::unique_ptr<Sprite> sprite) {

@@ -2,6 +2,7 @@
 
 #include "node2D.hpp"
 #include <cstdint>
+#include <string>
 
 class Sprite : public Node2D {
 public:
@@ -9,14 +10,14 @@ public:
     std::vector<std::unique_ptr<Node>> children,
     glm::vec3 position,
     glm::vec2 scale,
-    glm::vec1 rotation
+    float rotation
   );
 
   Sprite (
     std::vector<std::unique_ptr<Node>> children,
     glm::vec3 position,
     glm::vec2 scale,
-    glm::vec1 rotation,
+    float rotation,
     std::string texturePath
   );
 
@@ -25,14 +26,14 @@ public:
   void _process(float deltaTime) override;
 
   std::string texturePath = "assets/textures/texture.jpg";
-  uint32_t textureId;
+  uint32_t textureId = 0;
   bool dirty = false;
   int quadIndex = -1;
 
 private:
   glm::vec3 lastPosition;
   glm::vec2 lastScale;
-  glm::vec1 lastRotation;
+  float lastRotation;
   std::string lastTexturePath;
 };
 

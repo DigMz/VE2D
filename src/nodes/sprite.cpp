@@ -1,11 +1,12 @@
 #include "sprite.hpp"
+#include <iostream>
 #include <numbers>
 
 Sprite::Sprite (
   std::vector<std::unique_ptr<Node>> children,
   glm::vec3 position,
   glm::vec2 scale,
-  glm::vec1 rotation
+  float rotation
 ) :
   Node2D(
     std::move(children),
@@ -22,7 +23,7 @@ Sprite::Sprite (
   std::vector<std::unique_ptr<Node>> children,
   glm::vec3 position,
   glm::vec2 scale,
-  glm::vec1 rotation,
+  float rotation,
   std::string texturePath
 ) :
   Node2D(
@@ -47,7 +48,7 @@ void Sprite::_ready() {
 }
 
 void Sprite::_process(float deltaTime) {
-  rotation += std::numbers::pi * deltaTime;
+  rotation += std::numbers::pi_v<float> * deltaTime;
 
   if (lastPosition != position ||
       lastScale != scale       ||

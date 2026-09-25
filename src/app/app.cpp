@@ -560,7 +560,7 @@ void Application::initScene() {
     std::vector<std::unique_ptr<Node>> {},
     glm::vec3 {0.0f, 0.0f, 0.0f},
     glm::vec2 {1.0f, 1.0f},
-    glm::vec1 {0.0f}
+    0.0f
   )));
 
   currentScene.reset(new Scene(
@@ -619,7 +619,7 @@ void Application::mainLoop() {
               std::vector<std::unique_ptr<Node>> {},
               glm::vec3 {static_cast<float>(quad_offset), 0.0f, 0.0f},
               glm::vec2 {1.0f, 1.0f},
-              glm::vec1 {0.0f}
+              0.0f
             )));
             quad_offset++;
             currentScene->printDebug();

@@ -1,9 +1,8 @@
 #include "node.hpp"
 
-#include <vector>
-#include <concepts>
 #include <memory>
 #include <utility>
+#include <vector>
 
 Node::Node(
   std::vector<std::unique_ptr<Node>> children
@@ -29,12 +28,6 @@ void Node::process(float deltaTime) {
     child->process(deltaTime);
   }
   _process(deltaTime);
-}
-
-template<std::derived_from<Node> T, class... Args>
-void Node::addChild(Args&&... args) {
-  auto child = std::make_unique<T>(std::forward<Args>(args)...);
-  children.push_back(std::move(child));
 }
 
 // Called before children's init

@@ -13,12 +13,12 @@ public:
     std::vector<std::unique_ptr<Node>> children,
     glm::vec3 position,
     glm::vec2 scale,
-    glm::vec1 rotation
+    float rotation
   );
 
   void process(float deltaTime) override;
 
   glm::vec3 position;
   glm::vec2 scale;
-  glm::vec1 rotation;
+  float rotation;
 };

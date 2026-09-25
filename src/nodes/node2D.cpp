@@ -1,10 +1,12 @@
 #include "node2D.hpp"
 
+#include <utility>
+
 Node2D::Node2D (
   std::vector<std::unique_ptr<Node>> children,
   glm::vec3 position,
   glm::vec2 scale,
-  glm::vec1 rotation
+  float rotation
 ) :
   Node(std::move(children)),
   position(position),
