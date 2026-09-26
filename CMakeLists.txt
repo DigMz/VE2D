@@ -19,6 +19,7 @@ find_package(SDL3 REQUIRED CONFIG)
 find_package(glm REQUIRED)
 find_package(Vulkan 1.4.335 REQUIRED)
 find_package(tinyobjloader REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 # find_package(tinygltf REQUIRED)
 # find_package(KTX REQUIRED)
 
@@ -86,6 +87,7 @@ add_executable(${PROJECT_NAME}
     src/nodes/node.cpp
     src/nodes/node2D.cpp
     src/nodes/sprite.cpp
+    src/debug/debug_overlay.cpp
 )
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 
@@ -97,7 +99,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
   CXX_STANDARD_REQUIRED ON
   CXX_EXTENSIONS OFF
 )
-target_link_libraries (${PROJECT_NAME} Vulkan::cppm SDL3::SDL3)
+target_link_libraries (${PROJECT_NAME} Vulkan::cppm SDL3::SDL3 imgui::imgui)
 target_precompile_headers(${PROJECT_NAME} PRIVATE
   <vulkan/vulkan_raii.hpp>
   <vulkan/vulkan.hpp>

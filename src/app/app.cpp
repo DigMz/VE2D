@@ -30,6 +30,7 @@ void Application::run() {
 
 	initWindow();
 	initVulkan();
+  initDebugOverlay();
   initScene();
 	mainLoop();
 	cleanup();
@@ -84,8 +85,24 @@ void Application::initVulkan() {
   createSyncObjects();
 
   createCameraUBOs();
-  
 
+
+}
+
+void Application::initDebugOverlay() {
+  vk::Format depthFormat = vk_util::findDepthFormat(device, physicalDevice);
+
+  debugOverlay = std::make_unique<DebugOverlay>(
+    window,
+    instance,
+    physicalDevice,
+    device,
+    queueIndex,
+    queue,
+    swapChainSurfaceFormat.format,
+    depthFormat,
+    static_cast<uint32_t>(swapChainImages.size())
+  );
 }
 
 void Application::createInstance() {
@@ -461,7 +478,10 @@ void Application::drawFrame() {
     depthImage,
     depthImageView,
     frameIndex,
-    imageIndex
+    imageIndex,
+    showDebugOverlay
+      ? std::function<void(vk::raii::CommandBuffer&)>([&](vk::raii::CommandBuffer& cb) { debugOverlay->draw(cb); })
+      : nullptr
   );
 
   vk::PipelineStageFlags waitDestinationStageMask( vk::PipelineStageFlagBits::eColorAttachmentOutput );
@@ -616,6 +636,8 @@ void Application::mainLoop() {
   while (running) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+      debugOverlay->processEvent(event);
+
       switch (event.type) {
         case SDL_EVENT_QUIT:
           running = false;
@@ -641,8 +663,18 @@ void Application::mainLoop() {
           }
           break;
         case SDL_EVENT_KEY_DOWN:
+          if (event.key.scancode == SDL_SCANCODE_F1) {
+            showDebugOverlay = !showDebugOverlay;
+            mouseCaptured = !showDebugOverlay;
+            SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
+          }
           if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
-            mouseCaptured = !mouseCaptured;
+            if (showDebugOverlay) {
+              showDebugOverlay = false;
+              mouseCaptured = true;
+            } else {
+              mouseCaptured = !mouseCaptured;
+            }
             SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
           }
           if (event.key.scancode == SDL_SCANCODE_Q) {
@@ -666,7 +698,12 @@ void Application::mainLoop() {
     deltaTime = std::min(deltaTime, 0.1f);
     lastFrameTime = now;
 
-    processInput(deltaTime);
+    if (!showDebugOverlay) processInput(deltaTime);
+
+    if (showDebugOverlay) {
+      debugOverlay->newFrame();
+      debugOverlay->buildUI(deltaTime, currentScene->getQuadCount(), currentScene->getTextureCount());
+    }
 
     // updateGPUObjectsBuffer();
 
@@ -695,6 +732,8 @@ void Application::processInput(float deltaTime) {
 void Application::cleanup() {
   currentScene.reset();
   // delete currentScene.release();
+
+  debugOverlay.reset();
 
   // Explicitly destroy all Vulkan objects before quitting SDL
   // destroys the Wayland display underneath them

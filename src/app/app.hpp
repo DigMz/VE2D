@@ -32,6 +32,7 @@ import vulkan.hpp;
 #include <tiny_obj_loader.h>
 
 #include "scenes/scene.hpp"
+#include "debug/debug_overlay.hpp"
 
 const uint32_t WIDTH  = 800;
 const uint32_t HEIGHT = 600;
@@ -111,6 +112,9 @@ private:
 
   std::unique_ptr<Scene> currentScene = nullptr;
 
+  std::unique_ptr<DebugOverlay> debugOverlay = nullptr;
+  bool showDebugOverlay = false;
+
   static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT       severity,
                                                         vk::DebugUtilsMessageTypeFlagsEXT              type,
                                                         const vk::DebugUtilsMessengerCallbackDataEXT * pCallbackData,
@@ -123,6 +127,7 @@ private:
 
 	void initWindow();
 	void initVulkan();
+  void initDebugOverlay();
   void initScene();
 
   void createInstance();

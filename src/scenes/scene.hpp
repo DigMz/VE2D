@@ -29,12 +29,16 @@ public:
     vk::raii::Image& depthImage,
     vk::raii::ImageView& depthImageView,
     uint32_t frameIndex,
-    unsigned int imageIndex
+    unsigned int imageIndex,
+    std::function<void(vk::raii::CommandBuffer&)> overlayDraw = nullptr
   );
 
   void funcTree(std::function<void(std::unique_ptr<Node>&)> func);
   void pushSpriteDataToRenderer(Sprite &sprite);
   void updateSpriteDataOnRenderer(Sprite &sprite);
+
+  size_t getQuadCount() const { return renderer->getQuadCount(); }
+  size_t getTextureCount() const { return renderer->getTextureCount(); }
 
   template<std::derived_from<Node> T, class... Args>
   void addNodeToRoot(Args&&... args) {

@@ -29,6 +29,7 @@
           ktx-tools
           stb
           shader-slang
+          (imgui.override { IMGUI_BUILD_SDL3_BINDING = true; IMGUI_BUILD_VULKAN_BINDING = true; })
         ];
 
         shellHook = ''
