@@ -1,6 +1,7 @@
 #include "scene.hpp"
 
 #include "nodes/node.hpp"
+#include "nodes/node2D.hpp"
 #include "nodes/sprite.hpp"
 
 #include <cstdint>
@@ -34,8 +35,8 @@ void Scene::pushSpriteDataToRenderer(Sprite &sprite) {
 void Scene::updateSpriteDataOnRenderer(Sprite &sprite) {
   if (!textureIdRef.contains(sprite.texturePath)) {
     textureIdRef[sprite.texturePath] = renderer->addTexture(sprite.texturePath);
-    sprite.textureId = textureIdRef[sprite.texturePath];
   }
+  sprite.textureId = textureIdRef[sprite.texturePath];
 
   renderer->updateQuadObject({
     .position = {-sprite.get_global_position().x, sprite.get_global_position().y, -sprite.get_global_position().z},
@@ -49,33 +50,36 @@ void Scene::updateSpriteDataOnRenderer(Sprite &sprite) {
 void Scene::init() {
   std::cout << "Initializing Scene Tree" << std::endl;
 
+  // Parent pointers must exist, and global transforms must be computed,
+  // before we read global position/scale/rotation to push initial data.
+  root->init();
+  updateNode2DTransforms(*root);
+
   // Go through every node, add unique textures to the renderer, and map its id
   funcTree( [&](std::unique_ptr<Node> &node) -> void {
-    try {
-      Sprite &sprite = dynamic_cast<Sprite&>(*node);
-      pushSpriteDataToRenderer(sprite);
-    } catch (const std::bad_cast&) { }
+    if (Sprite* sprite = dynamic_cast<Sprite*>(node.get())) {
+      pushSpriteDataToRenderer(*sprite);
+    }
   });
 
   for (const auto& [tex, id] : textureIdRef) {
     std::cout << "Texture: " << tex << " Id: " << id << std::endl;
   }
 
-  root->init();
   root->ready();
 }
 
 void Scene::process(float deltaTime) {
   root->process(deltaTime);
+  updateNode2DTransforms(*root);
 
   // Go through every node, add unique textures to the renderer, and map its id
   funcTree( [&](std::unique_ptr<Node> &node) -> void {
-    try {
-      Sprite &sprite = dynamic_cast<Sprite&>(*node);
-      if (sprite.dirty) {
-        updateSpriteDataOnRenderer(sprite);
+    if (Sprite* sprite = dynamic_cast<Sprite*>(node.get())) {
+      if (sprite->dirty) {
+        updateSpriteDataOnRenderer(*sprite);
       }
-    } catch (const std::bad_cast&) { }
+    }
   });
 }
 
@@ -99,12 +103,6 @@ void Scene::recordFrame(
    frameIndex,
    imageIndex
   );
-}
-
-template<std::derived_from<Node> T, class... Args>
-void Scene::addNodeToRoot(Args&&... args) {
-  auto child = std::make_unique<T>(std::forward<Args>(args)...);
-  root->children.push_back(std::move(child));
 }
 
 void Scene::addSprite(std::unique_ptr<Sprite> sprite) {

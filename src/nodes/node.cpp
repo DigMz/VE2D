@@ -39,12 +39,6 @@ void Node::process(float deltaTime) {
   _process(deltaTime);
 }
 
-template<std::derived_from<Node> T, class... Args>
-void Node::addChild(Args&&... args) {
-  auto child = std::make_unique<T>(std::forward<Args>(args)...);
-  children.push_back(std::move(child));
-}
-
 // Called before children's init
 void Node::_init() {}
 // Called after children's ready

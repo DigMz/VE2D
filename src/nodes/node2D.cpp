@@ -29,21 +29,9 @@ Node2D::Node2D (
   global_rotation(rotation)
 { }
 
-glm::vec3 Node2D::get_global_position() {
-  if (Node2D* node = dynamic_cast<Node2D*>(parent)) {
-    return global_position;
-  } else { return position;}
-}
-glm::vec2 Node2D::get_global_scale() {
-  if (Node2D* node = dynamic_cast<Node2D*>(parent)) {
-    return global_scale;
-  } else { return scale; }
-}
-glm::vec1 Node2D::get_global_rotation() {
-  if (Node2D* node = dynamic_cast<Node2D*>(parent)) {
-    return global_rotation;
-  } else { return rotation; }
-}
+glm::vec3 Node2D::get_global_position() { return global_position; }
+glm::vec2 Node2D::get_global_scale() { return global_scale; }
+glm::vec1 Node2D::get_global_rotation() { return global_rotation; }
 
 glm::vec3 rotate_position(glm::vec3 position, glm::vec1 rotation) {
   return {
@@ -53,22 +41,38 @@ glm::vec3 rotate_position(glm::vec3 position, glm::vec1 rotation) {
   };
 }
 
-void Node2D::process(float deltaTime) {
-  // std::cout << name << std::endl;
-  Node::process(deltaTime);
-  for (std::unique_ptr<Node> &child : children) {
-    Node2D &node2D = dynamic_cast<Node2D&>(*child);
-    glm::vec3 rotated_position = rotate_position(node2D.position, node2D.rotation);
-    node2D.global_position = this->global_position + glm::vec3({
-      rotated_position.x * this->global_scale.x,
-      rotated_position.y * this->global_scale.y,
-      node2D.position.z
+void Node2D::updateTransform() {
+  if (Node2D* parent2D = dynamic_cast<Node2D*>(parent)) {
+    glm::vec3 rotated_position = rotate_position(position, rotation);
+    global_position = parent2D->global_position + glm::vec3({
+      rotated_position.x * parent2D->global_scale.x,
+      rotated_position.y * parent2D->global_scale.y,
+      position.z
     });
-    node2D.global_scale = {
-      this->global_scale.x * node2D.scale.x,
-      this->global_scale.y * node2D.scale.y
+    global_scale = {
+      parent2D->global_scale.x * scale.x,
+      parent2D->global_scale.y * scale.y
     };
-    node2D.global_rotation = this->global_rotation + node2D.rotation;
+    global_rotation = parent2D->global_rotation + rotation;
+  } else {
+    global_position = position;
+    global_scale = scale;
+    global_rotation = rotation;
+  }
+
+  // Recurse after updating our own global transform, so children see a fresh parent global
+  for (std::unique_ptr<Node>& child : children) {
+    updateNode2DTransforms(*child);
+  }
+}
+
+void updateNode2DTransforms(Node& node) {
+  if (Node2D* node2D = dynamic_cast<Node2D*>(&node)) {
+    node2D->updateTransform();
+  } else {
+    for (std::unique_ptr<Node>& child : node.children) {
+      updateNode2DTransforms(*child);
+    }
   }
 }
 
