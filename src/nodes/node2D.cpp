@@ -53,13 +53,17 @@ glm::vec3 rotate_position(glm::vec3 position, glm::vec1 rotation) {
   };
 }
 
-// TODO: Account for Node2D's with no Node2D parents when changing globals
 void Node2D::process(float deltaTime) {
   // std::cout << name << std::endl;
   Node::process(deltaTime);
   for (std::unique_ptr<Node> &child : children) {
     Node2D &node2D = dynamic_cast<Node2D&>(*child);
-    node2D.global_position = this->global_position + rotate_position(node2D.position, node2D.rotation);
+    glm::vec3 rotated_position = rotate_position(node2D.position, node2D.rotation);
+    node2D.global_position = this->global_position + glm::vec3({
+      rotated_position.x * this->global_scale.x,
+      rotated_position.y * this->global_scale.y,
+      node2D.position.z
+    });
     node2D.global_scale = {
       this->global_scale.x * node2D.scale.x,
       this->global_scale.y * node2D.scale.y

@@ -561,19 +561,36 @@ void Application::initScene() {
   Sprite root = Sprite(
     {},
     glm::vec3(0.0f),
-    glm::vec2(1.0f),
+    glm::vec2(2.0f),
     glm::vec1(0.0f),
     "assets/textures/circle.png",
     "Root Sprite"
   );
-  root.children.push_back(std::unique_ptr<Node>( new Sprite(
-    std::vector<std::unique_ptr<Node>> {},
+  Sprite* child = new Sprite(
+    {},
     glm::vec3(1.0f, 0.0f, 1.0f),
     glm::vec2(1.0f),
     glm::vec1(2.0f),
     "assets/textures/circle.png",
     "Child Sprite"
+  );
+  child->children.push_back(std::unique_ptr<Node> ( new Sprite (
+      std::vector<std::unique_ptr<Node>> {},
+      glm::vec3(1.0f, 0.0f, 1.0f),
+      glm::vec2(1.0f),
+      glm::vec1(1.0f),
+      "assets/textures/circle.png",
+      "Child Child Sprite"
   )));
+  root.children.push_back(std::unique_ptr<Node>(child));
+  // root.children.push_back(std::unique_ptr<Node>( new Sprite(
+  //   std::vector<std::unique_ptr<Node>> {},
+  //   glm::vec3(1.0f, 0.0f, 1.0f),
+  //   glm::vec2(1.0f),
+  //   glm::vec1(2.0f),
+  //   "assets/textures/circle.png",
+  //   "Child Sprite"
+  // )));
 
   std::cout << "Root Children: " << root.children.size() << std::endl;
 
