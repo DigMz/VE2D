@@ -140,6 +140,7 @@ EditorActions DebugOverlay::buildUI(float deltaTime, size_t quadCount, size_t te
     static_cast<uint32_t>(std::max(available.x * framebufferScale.x, 0.0f)),
     static_cast<uint32_t>(std::max(available.y * framebufferScale.y, 0.0f))
   };
+  actions.viewportHovered = ImGui::IsWindowHovered();
   ImGui::End();
 
   ImGui::Render();

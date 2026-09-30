@@ -16,6 +16,7 @@ import vulkan.hpp;
 struct EditorActions {
   bool         addQuad      = false;
   vk::Extent2D viewportSize = {0, 0}; // pixel size of the "Game" panel's image area
+  bool         viewportHovered = false; // mouse is over the "Game" panel
 };
 
 // Owns the entire Dear ImGui lifecycle (context + SDL3 + Vulkan backends) so

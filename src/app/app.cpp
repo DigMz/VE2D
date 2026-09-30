@@ -715,14 +715,15 @@ void Application::mainLoop() {
     deltaTime = std::min(deltaTime, 0.1f);
     lastFrameTime = now;
 
-    if (!showEditor) processInput(deltaTime);
-
     EditorActions editorActions;
     if (showEditor) {
       debugOverlay->newFrame();
       editorActions = debugOverlay->buildUI(deltaTime, currentScene->getQuadCount(), currentScene->getTextureCount(), frameIndex);
       if (editorActions.addQuad) addQuad();
     }
+
+    // In the editor, the camera only moves while the mouse is over the "Game" panel
+    if (!showEditor || editorActions.viewportHovered) processInput(deltaTime);
 
     // updateGPUObjectsBuffer();
 
