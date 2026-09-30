@@ -210,7 +210,9 @@ void Renderer::createGraphicsPipeline() {
     .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
     .colorBlendOp        = vk::BlendOp::eAdd,
     .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-    .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+    // "Over" for alpha too, so transparent texels don't punch holes in the
+    // opaque clear - the editor's Game panel alpha-blends this image.
+    .dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
     .alphaBlendOp        = vk::BlendOp::eAdd,
     .colorWriteMask      = vk::ColorComponentFlagBits::eR |
                            vk::ColorComponentFlagBits::eG | 
