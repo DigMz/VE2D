@@ -32,7 +32,7 @@ import vulkan.hpp;
 #include <tiny_obj_loader.h>
 
 #include "scenes/scene.hpp"
-#include "debug/debug_overlay.hpp"
+#include "editor/editor_overlay.hpp"
 #include "input/camera.hpp"
 #include "input/input_handler.hpp"
 
@@ -107,7 +107,7 @@ private:
 
   std::unique_ptr<Scene> currentScene = nullptr;
 
-  std::unique_ptr<DebugOverlay> debugOverlay = nullptr;
+  std::unique_ptr<EditorOverlay> editorOverlay = nullptr;
   bool showEditor = false; // F1: editor UI with the game in a panel, vs. fullscreen game
 
   int nextQuadOffset = 1;
@@ -127,7 +127,7 @@ private:
 
 	void initWindow();
 	void initVulkan();
-  void initDebugOverlay();
+  void initEditorOverlay();
   void initScene();
 
   void createInstance();

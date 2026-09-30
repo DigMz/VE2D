@@ -19,7 +19,7 @@ struct InputActions {
 
 // Mouse and keyboard game controls: camera movement (WASD/Space/Ctrl held keys,
 // middle-drag pan, scroll-wheel zoom), mouse capture, and the key shortcuts
-// reported through InputActions. ImGui input is handled by DebugOverlay.
+// reported through InputActions. ImGui input is handled by EditorOverlay.
 class InputHandler {
 public:
   explicit InputHandler(SDL_Window* window);

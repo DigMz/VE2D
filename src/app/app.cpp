@@ -30,7 +30,7 @@ void Application::run() {
 
 	initWindow();
 	initVulkan();
-  initDebugOverlay();
+  initEditorOverlay();
   initScene();
 	mainLoop();
 	cleanup();
@@ -83,10 +83,10 @@ void Application::initVulkan() {
 
 }
 
-void Application::initDebugOverlay() {
+void Application::initEditorOverlay() {
   vk::Format depthFormat = vk_util::findDepthFormat(device, physicalDevice);
 
-  debugOverlay = std::make_unique<DebugOverlay>(
+  editorOverlay = std::make_unique<EditorOverlay>(
     window,
     instance,
     physicalDevice,
@@ -476,7 +476,7 @@ void Application::drawFrame() {
     frameIndex,
     imageIndex,
     showEditor
-      ? std::function<void(vk::raii::CommandBuffer&)>([&](vk::raii::CommandBuffer& cb) { debugOverlay->draw(cb); })
+      ? std::function<void(vk::raii::CommandBuffer&)>([&](vk::raii::CommandBuffer& cb) { editorOverlay->draw(cb); })
       : nullptr,
     showEditor
   );
@@ -633,7 +633,7 @@ void Application::resizeViewport(vk::Extent2D extent) {
   if (extent.width == 0 || extent.height == 0 || extent == renderer.getViewportExtent()) return;
 
   renderer.resizeViewport(extent); // waits for the GPU to go idle
-  debugOverlay->setViewportTextures(renderer.getViewportSampler(), renderer.getViewportImageViews());
+  editorOverlay->setViewportTextures(renderer.getViewportSampler(), renderer.getViewportImageViews());
 }
 
 void Application::setEditorOpen(bool open) {
@@ -660,7 +660,7 @@ void Application::mainLoop() {
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-      debugOverlay->processEvent(event);
+      editorOverlay->processEvent(event);
       input->processEvent(event, camera);
 
       switch (event.type) {
@@ -691,8 +691,8 @@ void Application::mainLoop() {
 
     EditorActions editorActions;
     if (showEditor) {
-      debugOverlay->newFrame();
-      editorActions = debugOverlay->buildUI(deltaTime, currentScene->getQuadCount(), currentScene->getTextureCount(), frameIndex);
+      editorOverlay->newFrame();
+      editorActions = editorOverlay->buildUI(deltaTime, currentScene->getQuadCount(), currentScene->getTextureCount(), frameIndex);
       if (editorActions.addQuad) addQuad();
     }
 
@@ -723,7 +723,7 @@ void Application::cleanup() {
   currentScene.reset();
   // delete currentScene.release();
 
-  debugOverlay.reset();
+  editorOverlay.reset();
   input.reset();
 
   // Explicitly destroy all Vulkan objects before quitting SDL

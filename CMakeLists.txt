@@ -87,7 +87,7 @@ add_executable(${PROJECT_NAME}
     src/nodes/node.cpp
     src/nodes/node2D.cpp
     src/nodes/sprite.cpp
-    src/debug/debug_overlay.cpp
+    src/editor/editor_overlay.cpp
     src/input/input_handler.cpp
 )
 target_include_directories(${PROJECT_NAME} PRIVATE src)

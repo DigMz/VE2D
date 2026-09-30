@@ -24,7 +24,7 @@ All Vulkan setup is driven by `Application` (`src/app/app.cpp`), using `vk::raii
 2. Acquire the next swapchain image (`acquireNextImage`), signaling `presentCompleteSemaphores[frameIndex]`. On `eErrorOutOfDateKHR`, calls `recreateSwapChain()` and skips the rest of the frame.
 3. Recompute the camera's view/projection matrices (`glm::lookAt` / Y-flipped `glm::perspective`) and copy them into the current frame's camera UBO.
 4. Reset the fence and the frame's command buffer.
-5. Delegate to `Scene::recordFrame()` → `Renderer::recordFrame()` to record the actual draw commands (see below), passing an optional overlay-draw callback when the debug overlay is visible.
+5. Delegate to `Scene::recordFrame()` → `Renderer::recordFrame()` to record the actual draw commands (see below), passing an optional overlay-draw callback when the editor overlay is visible.
 6. Submit the command buffer, waiting on `presentCompleteSemaphores[frameIndex]` at the color-attachment-output stage and signaling `renderFinishedSemaphores[imageIndex]`, fenced by `inFlightFences[frameIndex]`.
 7. Present, waiting on `renderFinishedSemaphores[imageIndex]`; on suboptimal/out-of-date or a pending resize, calls `recreateSwapChain()`.
 8. Advance `frameIndex` modulo `MAX_FRAMES_IN_FLIGHT`.
@@ -45,7 +45,7 @@ Note the semaphore indexing: `presentCompleteSemaphores`/`inFlightFences` are in
 6. Barrier the swapchain image `eColorAttachmentOptimal` → `ePresentSrcKHR`.
 7. End the command buffer.
 
-The viewport targets are created by `Renderer::resizeViewport()`, which waits for the device to go idle before reallocating. `Application` calls it after `drawFrame()` whenever the "Game" panel's pixel size changes, then re-registers the new image views with ImGui through `DebugOverlay::setViewportTextures()`. While the editor is open, the camera projection uses the viewport's aspect ratio instead of the swapchain's.
+The viewport targets are created by `Renderer::resizeViewport()`, which waits for the device to go idle before reallocating. `Application` calls it after `drawFrame()` whenever the "Game" panel's pixel size changes, then re-registers the new image views with ImGui through `EditorOverlay::setViewportTextures()`. While the editor is open, the camera projection uses the viewport's aspect ratio instead of the swapchain's.
 
 ## Data Flow: Sprites to GPU
 
