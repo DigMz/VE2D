@@ -92,7 +92,8 @@ void Scene::recordFrame(
   vk::raii::ImageView& depthImageView,
   uint32_t frameIndex,
   unsigned int imageIndex,
-  std::function<void(vk::raii::CommandBuffer&)> overlayDraw
+  std::function<void(vk::raii::CommandBuffer&)> overlayDraw,
+  bool sceneToViewport
 ) {
   renderer->recordFrame(
    commandBuffer,
@@ -103,7 +104,8 @@ void Scene::recordFrame(
    depthImageView,
    frameIndex,
    imageIndex,
-   overlayDraw
+   overlayDraw,
+   sceneToViewport
   );
 }
 

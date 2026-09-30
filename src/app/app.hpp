@@ -113,7 +113,11 @@ private:
   std::unique_ptr<Scene> currentScene = nullptr;
 
   std::unique_ptr<DebugOverlay> debugOverlay = nullptr;
-  bool showDebugOverlay = false;
+  bool showEditor = false; // F1: editor UI with the game in a panel, vs. fullscreen game
+
+  int nextQuadOffset = 1;
+  void addQuad();
+  void resizeViewport(vk::Extent2D extent);
 
   static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT       severity,
                                                         vk::DebugUtilsMessageTypeFlagsEXT              type,
