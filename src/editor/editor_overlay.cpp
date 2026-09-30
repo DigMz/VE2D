@@ -5,6 +5,7 @@
 #include <imgui_impl_vulkan.h>
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 
 EditorOverlay::EditorOverlay(
@@ -25,17 +26,22 @@ EditorOverlay::EditorOverlay(
   ImGui_ImplSDL3_InitForVulkan(window);
 
   // Dedicated pool for ImGui's own descriptor sets, per imgui_impl_vulkan.h:
-  // needs eFreeDescriptorSet, one combined image sampler for the font atlas,
-  // plus one per ImGui_ImplVulkan_AddTexture() call (the viewport images).
-  vk::DescriptorPoolSize poolSize {
-    .type            = vk::DescriptorType::eCombinedImageSampler,
-    .descriptorCount = 1 + MAX_VIEWPORT_TEXTURES
-  };
+  // needs eFreeDescriptorSet, separate sampled-image descriptors for the font
+  // atlas (IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE) plus one per
+  // ImGui_ImplVulkan_AddTexture() call (the viewport images), and sampler
+  // descriptors for the backend's own samplers.
+  std::array<vk::DescriptorPoolSize, 2> poolSizes {{
+    { .type = vk::DescriptorType::eSampledImage,
+      .descriptorCount = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE + MAX_VIEWPORT_TEXTURES },
+    { .type = vk::DescriptorType::eSampler,
+      .descriptorCount = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE },
+  }};
   vk::DescriptorPoolCreateInfo poolInfo {
     .flags         = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-    .maxSets       = 1 + MAX_VIEWPORT_TEXTURES,
-    .poolSizeCount = 1,
-    .pPoolSizes    = &poolSize
+    .maxSets       = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE + MAX_VIEWPORT_TEXTURES
+                   + IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE,
+    .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+    .pPoolSizes    = poolSizes.data()
   };
   descriptorPool = vk::raii::DescriptorPool(device, poolInfo);
 
@@ -51,26 +57,28 @@ EditorOverlay::EditorOverlay(
   pipelineRenderingCreateInfo.depthAttachmentFormat = static_cast<VkFormat>(depthFormat);
 
   ImGui_ImplVulkan_InitInfo initInfo{};
-  initInfo.Instance                    = *instance;
-  initInfo.PhysicalDevice              = *physicalDevice;
-  initInfo.Device                      = *device;
-  initInfo.QueueFamily                 = queueFamily;
-  initInfo.Queue                       = *queue;
-  initInfo.DescriptorPool              = *descriptorPool;
-  initInfo.RenderPass                  = VK_NULL_HANDLE;
-  initInfo.MinImageCount               = imageCount;
-  initInfo.ImageCount                  = imageCount;
-  initInfo.MSAASamples                 = VK_SAMPLE_COUNT_1_BIT;
-  initInfo.PipelineCache               = VK_NULL_HANDLE;
-  initInfo.Subpass                     = 0;
-  initInfo.UseDynamicRendering         = true;
-  initInfo.PipelineRenderingCreateInfo = pipelineRenderingCreateInfo;
-  initInfo.Allocator                   = nullptr;
-  initInfo.CheckVkResultFn             = nullptr;
-  initInfo.MinAllocationSize           = 1024 * 1024;
+  initInfo.ApiVersion                                   = VK_API_VERSION_1_4;
+  initInfo.Instance                                     = *instance;
+  initInfo.PhysicalDevice                               = *physicalDevice;
+  initInfo.Device                                       = *device;
+  initInfo.QueueFamily                                  = queueFamily;
+  initInfo.Queue                                        = *queue;
+  initInfo.DescriptorPool                               = *descriptorPool;
+  initInfo.MinImageCount                                = imageCount;
+  initInfo.ImageCount                                   = imageCount;
+  initInfo.PipelineCache                                = VK_NULL_HANDLE;
+  initInfo.PipelineInfoMain.RenderPass                  = VK_NULL_HANDLE;
+  initInfo.PipelineInfoMain.Subpass                     = 0;
+  initInfo.PipelineInfoMain.MSAASamples                 = VK_SAMPLE_COUNT_1_BIT;
+  initInfo.PipelineInfoMain.PipelineRenderingCreateInfo = pipelineRenderingCreateInfo;
+  initInfo.UseDynamicRendering                          = true;
+  initInfo.Allocator                                    = nullptr;
+  initInfo.CheckVkResultFn                              = nullptr;
+  initInfo.MinAllocationSize                            = 1024 * 1024;
 
+  // The font atlas is uploaded by the backend on the first frame
+  // (ImGuiBackendFlags_RendererHasTextures), so no explicit font upload here.
   ImGui_ImplVulkan_Init(&initInfo);
-  ImGui_ImplVulkan_CreateFontsTexture();
 }
 
 EditorOverlay::~EditorOverlay() {
