@@ -95,12 +95,19 @@ private:
   glm::vec3 cameraPos   = {0.0f, 0.0f, 2.0f};
   glm::vec3 cameraFront = glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f));
   glm::vec3 cameraUp    = {0.0f, -1.0f, 0.0f};
-  float     cameraYaw   = -90.0f;
-  float     cameraPitch = 0.0f;
-  float     cameraSpeed = 3.0f; // units/sec
+  float     cameraSpeed = 3.0f;  // units/sec
+  float     cameraFov   = 45.0f; // vertical, degrees
+  float     cameraZoomStep    = 0.1f; // fraction of the distance to z = 0 covered per scroll notch
+  float     cameraMinDistance = 0.2f;
+  float     cameraMaxDistance = 50.0f;
 
-  bool  mouseCaptured = true;
-  float mouseSensitivity = 0.1f;
+  bool  mouseCaptured   = true;
+  bool  panning         = false; // middle mouse held, started over the game view
+  bool  gameViewHovered = true;  // mouse over the game (always true outside the editor)
+
+  vk::Extent2D renderTargetExtent();
+  void panCamera(float dx, float dy);
+  void zoomCamera(float wheel);
 
   std::chrono::high_resolution_clock::time_point lastFrameTime;
 

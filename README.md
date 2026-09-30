@@ -47,7 +47,10 @@ build/VE2D/VE2D
 
 ## Controls
 
-- `W`/`A`/`S`/`D` + mouse — fly camera movement and look (in editor mode, `W`/`A`/`S`/`D`/`Space`/`Ctrl` move the camera while the mouse is over the "Game" panel)
+- `W`/`A`/`S`/`D` — move the camera up/left/down/right
+- Middle mouse drag — pan the camera
+- Scroll wheel / `Space` / `Ctrl` — move the camera forward/back along z
+- In editor mode, the camera controls only respond while the mouse is over the "Game" panel
 - `Space` / `Ctrl` — move up / down
 - `Q` — add a quad (same as the editor's "Add Quad" button)
 - `F1` — toggle editor mode (releases mouse capture so you can interact with it)
