@@ -19,7 +19,7 @@ public:
     std::string name = "Node2D"
   );
 
-  void process(float deltaTime) override;
+  void updateTransform();
 
   glm::vec3 position;
   glm::vec2 scale;
@@ -35,3 +35,7 @@ private:
   glm::vec2 global_scale;
   glm::vec1 global_rotation;
 };
+
+// Walks the subtree rooted at `node`, updating every Node2D found (skipping
+// through non-Node2D nodes to keep reaching further Node2D descendants).
+void updateNode2DTransforms(Node& node);

@@ -575,7 +575,8 @@ void Renderer::recordFrame(
   vk::raii::Image& depthImage,
   vk::raii::ImageView& depthImageView,
   uint32_t frameIndex,
-  unsigned int imageIndex
+  unsigned int imageIndex,
+  std::function<void(vk::raii::CommandBuffer&)> overlayDraw
 ) {
   updateGPUObjectsBuffer();
 
@@ -644,6 +645,8 @@ void Renderer::recordFrame(
 
   commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets[frameIndex], nullptr);
   commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), gpuObjects.size(), 0, 0, 0);
+
+  if (overlayDraw) overlayDraw(commandBuffer);
 
   commandBuffer.endRendering();
 

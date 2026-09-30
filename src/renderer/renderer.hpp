@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <vector>
 
@@ -61,7 +62,8 @@ public:
     vk::raii::Image& depthImage,
     vk::raii::ImageView& depthImageView,
     uint32_t frameIndex,
-    unsigned int imageIndex
+    unsigned int imageIndex,
+    std::function<void(vk::raii::CommandBuffer&)> overlayDraw = nullptr
   );
 
   int addQuadObject(QuadObject x) {
@@ -71,6 +73,9 @@ public:
   void updateQuadObject(QuadObject x, int index) {
     quadObjects[index] = x;
   }
+
+  size_t getQuadCount() const { return quadObjects.size(); }
+  size_t getTextureCount() const { return textureImages.size(); }
 
   void printDebug() {
     std::cout << "SizeC: " << gpuObjectsBufferCapacity << "SizeG: " << gpuObjects.size() << std::endl;
