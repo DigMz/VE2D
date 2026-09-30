@@ -47,7 +47,7 @@ void Application::initWindow() {
     throw std::runtime_error(std::string("SDL_CreateWindow failed") + SDL_GetError());
   }
 
-  SDL_SetWindowRelativeMouseMode(window, true);
+  input = std::make_unique<InputHandler>(window);
 }
 
 
@@ -433,9 +433,9 @@ void Application::updateCameraUBOBuffer(uint32_t currentImage) {
   vk::Extent2D targetExtent = renderTargetExtent();
 
   CameraUBO ubo{};
-  ubo.view  = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+  ubo.view  = glm::lookAt(camera.position, camera.position + camera.front, camera.up);
   ubo.proj  =
-    glm::perspective(glm::radians(cameraFov), static_cast<float>(targetExtent.width) / static_cast<float>(targetExtent.height), 0.1f, 100.0f);
+    glm::perspective(glm::radians(camera.fov), static_cast<float>(targetExtent.width) / static_cast<float>(targetExtent.height), 0.1f, 100.0f);
   ubo.proj[1][1] *= -1;
 
   memcpy(cameraUBOsMapped[currentImage], &ubo, sizeof(ubo));
@@ -636,6 +636,11 @@ void Application::resizeViewport(vk::Extent2D extent) {
   debugOverlay->setViewportTextures(renderer.getViewportSampler(), renderer.getViewportImageViews());
 }
 
+void Application::setEditorOpen(bool open) {
+  showEditor = open;
+  input->setEditorOpen(open);
+}
+
 void Application::addQuad() {
   currentScene->addSprite(std::unique_ptr<Sprite>( new Sprite(
     std::vector<std::unique_ptr<Node>> {},
@@ -651,9 +656,12 @@ void Application::mainLoop() {
   lastFrameTime = std::chrono::high_resolution_clock::now();
 
   while (running) {
+    input->beginFrame();
+
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
       debugOverlay->processEvent(event);
+      input->processEvent(event, camera);
 
       switch (event.type) {
         case SDL_EVENT_QUIT:
@@ -666,44 +674,15 @@ void Application::mainLoop() {
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
           framebufferResized = true;
           break;
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-          // Only start a pan over the game view, so middle-clicks on editor panels are left to ImGui
-          if (event.button.button == SDL_BUTTON_MIDDLE && gameViewHovered) panning = true;
-          break;
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-          if (event.button.button == SDL_BUTTON_MIDDLE) panning = false;
-          break;
-        case SDL_EVENT_MOUSE_MOTION:
-          if (panning) panCamera(event.motion.xrel, event.motion.yrel);
-          break;
-        case SDL_EVENT_MOUSE_WHEEL:
-          if (gameViewHovered) {
-            zoomCamera(event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y);
-          }
-          break;
-        case SDL_EVENT_KEY_DOWN:
-          if (event.key.scancode == SDL_SCANCODE_F1) {
-            showEditor = !showEditor;
-            mouseCaptured = !showEditor;
-            SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
-          }
-          if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
-            if (showEditor) {
-              showEditor = false;
-              mouseCaptured = true;
-            } else {
-              mouseCaptured = !mouseCaptured;
-            }
-            SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
-          }
-          if (event.key.scancode == SDL_SCANCODE_Q) {
-            addQuad();
-          }
-          break;
         default:
           break;
       }
     }
+
+    const InputActions& inputActions = input->getActions();
+    if (inputActions.toggleEditor) setEditorOpen(!showEditor);
+    if (inputActions.closeEditor)  setEditorOpen(false);
+    if (inputActions.addQuad)      addQuad();
 
     auto now = std::chrono::high_resolution_clock::now();
     float deltaTime = std::chrono::duration<float>(now - lastFrameTime).count();
@@ -719,8 +698,8 @@ void Application::mainLoop() {
 
     // In the editor, the camera only responds while the mouse is over the "Game" panel.
     // Mouse events for the next frame are checked against this frame's hover state.
-    gameViewHovered = !showEditor || editorActions.viewportHovered;
-    if (gameViewHovered) processInput(deltaTime);
+    input->setGameView(renderTargetExtent(), !showEditor || editorActions.viewportHovered);
+    input->update(deltaTime, camera);
 
     // updateGPUObjectsBuffer();
 
@@ -735,48 +714,9 @@ void Application::mainLoop() {
   device.waitIdle();
 }
 
-void Application::processInput(float deltaTime) {
-  const bool *keys = SDL_GetKeyboardState(nullptr);
-  float velocity = cameraSpeed * deltaTime;
-
-  glm::vec3 right = glm::normalize(glm::cross(cameraFront, cameraUp));
-
-  if (keys[SDL_SCANCODE_W]) cameraPos += cameraUp * velocity;
-  if (keys[SDL_SCANCODE_S]) cameraPos -= cameraUp * velocity;
-  if (keys[SDL_SCANCODE_A]) cameraPos -= right * velocity;
-  if (keys[SDL_SCANCODE_D]) cameraPos += right * velocity;
-  if (keys[SDL_SCANCODE_SPACE])    cameraPos -= cameraFront * velocity;
-  if (keys[SDL_SCANCODE_LCTRL])    cameraPos += cameraFront * velocity;
-}
-
 // In editor mode the scene is drawn into the "Game" panel, not the whole window
 vk::Extent2D Application::renderTargetExtent() {
   return showEditor ? currentScene->getRenderer().getViewportExtent() : swapChainExtent;
-}
-
-// Grab-style pan: the point under the cursor on the z = 0 plane (where the
-// sprites live) follows the cursor. dx/dy are mouse deltas in window
-// coordinates. Assumes the camera looks straight down -z, as it always does now.
-void Application::panCamera(float dx, float dy) {
-  float pixelDensity = SDL_GetWindowPixelDensity(window);
-  if (pixelDensity <= 0.0f) pixelDensity = 1.0f;
-  float viewHeight = renderTargetExtent().height / pixelDensity;
-  if (viewHeight <= 0.0f) return;
-
-  float distance            = std::max(cameraPos.z, cameraMinDistance);
-  float unitsPerWindowPixel = 2.0f * distance * std::tan(glm::radians(cameraFov) * 0.5f) / viewHeight;
-
-  glm::vec3 right = glm::normalize(glm::cross(cameraFront, cameraUp));
-  cameraPos -= right    * (dx * unitsPerWindowPixel);
-  cameraPos += cameraUp * (dy * unitsPerWindowPixel);
-}
-
-// Moves the camera along z. Each notch covers a fixed fraction of the distance
-// to z = 0, so zooming feels the same near and far and never passes the plane.
-void Application::zoomCamera(float wheel) {
-  float distance    = std::max(cameraPos.z, cameraMinDistance);
-  float newDistance = std::clamp(distance * std::pow(1.0f - cameraZoomStep, wheel), cameraMinDistance, cameraMaxDistance);
-  cameraPos += cameraFront * (distance - newDistance);
 }
 
 void Application::cleanup() {
@@ -784,6 +724,7 @@ void Application::cleanup() {
   // delete currentScene.release();
 
   debugOverlay.reset();
+  input.reset();
 
   // Explicitly destroy all Vulkan objects before quitting SDL
   // destroys the Wayland display underneath them

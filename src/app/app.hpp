@@ -33,6 +33,8 @@ import vulkan.hpp;
 
 #include "scenes/scene.hpp"
 #include "debug/debug_overlay.hpp"
+#include "input/camera.hpp"
+#include "input/input_handler.hpp"
 
 const uint32_t WIDTH  = 800;
 const uint32_t HEIGHT = 600;
@@ -92,26 +94,12 @@ private:
   uint32_t                             frameIndex         = 0;
   bool                                 framebufferResized = false;
 
-  glm::vec3 cameraPos   = {0.0f, 0.0f, 2.0f};
-  glm::vec3 cameraFront = glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f));
-  glm::vec3 cameraUp    = {0.0f, -1.0f, 0.0f};
-  float     cameraSpeed = 3.0f;  // units/sec
-  float     cameraFov   = 45.0f; // vertical, degrees
-  float     cameraZoomStep    = 0.1f; // fraction of the distance to z = 0 covered per scroll notch
-  float     cameraMinDistance = 0.2f;
-  float     cameraMaxDistance = 50.0f;
-
-  bool  mouseCaptured   = true;
-  bool  panning         = false; // middle mouse held, started over the game view
-  bool  gameViewHovered = true;  // mouse over the game (always true outside the editor)
+  Camera                        camera;
+  std::unique_ptr<InputHandler> input = nullptr;
 
   vk::Extent2D renderTargetExtent();
-  void panCamera(float dx, float dy);
-  void zoomCamera(float wheel);
 
   std::chrono::high_resolution_clock::time_point lastFrameTime;
-
-  void processInput(float deltaTime);
 
   std::vector<const char *> requiredDeviceExtension = {
     vk::KHRSwapchainExtensionName
@@ -123,6 +111,7 @@ private:
   bool showEditor = false; // F1: editor UI with the game in a panel, vs. fullscreen game
 
   int nextQuadOffset = 1;
+  void setEditorOpen(bool open);
   void addQuad();
   void resizeViewport(vk::Extent2D extent);
 
