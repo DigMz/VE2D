@@ -62,7 +62,7 @@ build/VE2D/VE2D
 - `src/renderer` — the Vulkan rendering pipeline: pipeline/descriptor setup, buffers, textures, and per-frame command recording.
 - `src/scenes` — bridges the node tree to the renderer, pushing sprite transforms and textures into GPU-side data each frame.
 - `src/nodes` — the `Node`/`Node2D`/`Sprite` scene graph and transform propagation.
-- `src/debug` — the ImGui-based editor UI.
+- `src/editor` — the ImGui-based editor UI.
 - `src/input` — mouse/keyboard game controls (`InputHandler`) and the `Camera` state they move.
 - `src/utils` — shared Vulkan and general-purpose helper functions.
 - `src/shaders` — Slang shader source, compiled to SPIR-V at build time.

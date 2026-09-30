@@ -1,4 +1,4 @@
-#include "debug_overlay.hpp"
+#include "editor_overlay.hpp"
 
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-DebugOverlay::DebugOverlay(
+EditorOverlay::EditorOverlay(
   SDL_Window* window,
   vk::raii::Instance& instance,
   vk::raii::PhysicalDevice& physicalDevice,
@@ -73,7 +73,7 @@ DebugOverlay::DebugOverlay(
   ImGui_ImplVulkan_CreateFontsTexture();
 }
 
-DebugOverlay::~DebugOverlay() {
+EditorOverlay::~EditorOverlay() {
   for (VkDescriptorSet texture : viewportTextures) {
     ImGui_ImplVulkan_RemoveTexture(texture);
   }
@@ -82,17 +82,17 @@ DebugOverlay::~DebugOverlay() {
   ImGui::DestroyContext();
 }
 
-void DebugOverlay::processEvent(const SDL_Event& event) {
+void EditorOverlay::processEvent(const SDL_Event& event) {
   ImGui_ImplSDL3_ProcessEvent(&event);
 }
 
-void DebugOverlay::newFrame() {
+void EditorOverlay::newFrame() {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
 }
 
-EditorActions DebugOverlay::buildUI(float deltaTime, size_t quadCount, size_t textureCount, uint32_t frameIndex) {
+EditorActions EditorOverlay::buildUI(float deltaTime, size_t quadCount, size_t textureCount, uint32_t frameIndex) {
   constexpr float smoothing = 0.1f;
   smoothedDeltaTime = smoothedDeltaTime <= 0.0f
     ? deltaTime
@@ -148,14 +148,14 @@ EditorActions DebugOverlay::buildUI(float deltaTime, size_t quadCount, size_t te
   return actions;
 }
 
-void DebugOverlay::setViewportTextures(vk::Sampler sampler, const std::vector<vk::ImageView>& imageViews) {
+void EditorOverlay::setViewportTextures(vk::Sampler sampler, const std::vector<vk::ImageView>& imageViews) {
   for (VkDescriptorSet texture : viewportTextures) {
     ImGui_ImplVulkan_RemoveTexture(texture);
   }
   viewportTextures.clear();
 
   if (imageViews.size() > MAX_VIEWPORT_TEXTURES) {
-    throw std::runtime_error("DebugOverlay: too many viewport textures for its descriptor pool");
+    throw std::runtime_error("EditorOverlay: too many viewport textures for its descriptor pool");
   }
   for (vk::ImageView imageView : imageViews) {
     viewportTextures.push_back(ImGui_ImplVulkan_AddTexture(
@@ -166,6 +166,6 @@ void DebugOverlay::setViewportTextures(vk::Sampler sampler, const std::vector<vk
   }
 }
 
-void DebugOverlay::draw(vk::raii::CommandBuffer& commandBuffer) {
+void EditorOverlay::draw(vk::raii::CommandBuffer& commandBuffer) {
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *commandBuffer);
 }

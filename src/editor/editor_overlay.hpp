@@ -25,9 +25,9 @@ struct EditorActions {
 // Draws a Godot-style editor layout: a fixed side panel on the left with
 // controls/stats, and a "Game" panel on the right showing the scene, which the
 // Renderer draws into an offscreen image (one per frame in flight).
-class DebugOverlay {
+class EditorOverlay {
 public:
-  DebugOverlay(
+  EditorOverlay(
     SDL_Window* window,
     vk::raii::Instance& instance,
     vk::raii::PhysicalDevice& physicalDevice,
@@ -38,10 +38,10 @@ public:
     vk::Format depthFormat,
     uint32_t imageCount
   );
-  ~DebugOverlay();
+  ~EditorOverlay();
 
-  DebugOverlay(const DebugOverlay&) = delete;
-  DebugOverlay& operator=(const DebugOverlay&) = delete;
+  EditorOverlay(const EditorOverlay&) = delete;
+  EditorOverlay& operator=(const EditorOverlay&) = delete;
 
   void processEvent(const SDL_Event& event);
   void newFrame();
