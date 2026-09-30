@@ -37,6 +37,8 @@ public:
   }
 
   ~Renderer() {
+    viewportTargets.clear();
+    viewportSampler.clear();
     descriptorSets.clear();
     descriptorPool.clear();
     indexBufferMemory.clear();
@@ -63,8 +65,18 @@ public:
     vk::raii::ImageView& depthImageView,
     uint32_t frameIndex,
     unsigned int imageIndex,
-    std::function<void(vk::raii::CommandBuffer&)> overlayDraw = nullptr
+    std::function<void(vk::raii::CommandBuffer&)> overlayDraw = nullptr,
+    bool sceneToViewport = false
   );
+
+  // Offscreen "game viewport" render target, one per frame in flight. When
+  // recordFrame() is called with sceneToViewport = true, the scene is drawn
+  // here instead of the swapchain, so the editor UI can show it as an image.
+  // Resizing waits for the device to go idle.
+  void resizeViewport(vk::Extent2D extent);
+  vk::Extent2D getViewportExtent() const { return viewportExtent; }
+  vk::Sampler getViewportSampler() const { return *viewportSampler; }
+  std::vector<vk::ImageView> getViewportImageViews() const;
 
   int addQuadObject(QuadObject x) {
     quadObjects.push_back(x);
@@ -124,7 +136,30 @@ private:
   vk::raii::DescriptorPool             descriptorPool = nullptr;
   std::vector<vk::raii::DescriptorSet> descriptorSets;
 
+  struct ViewportTarget {
+    vk::raii::Image        colorImage       = nullptr;
+    vk::raii::DeviceMemory colorImageMemory = nullptr;
+    vk::raii::ImageView    colorImageView   = nullptr;
+    vk::raii::Image        depthImage       = nullptr;
+    vk::raii::DeviceMemory depthImageMemory = nullptr;
+    vk::raii::ImageView    depthImageView   = nullptr;
+  };
+  std::vector<ViewportTarget>          viewportTargets;
+  vk::Extent2D                         viewportExtent  = {0, 0};
+  vk::raii::Sampler                    viewportSampler = nullptr;
+
   void init();
+
+  void createViewportSampler();
+  void beginPass(
+    vk::raii::CommandBuffer& commandBuffer,
+    vk::Image     colorImage,
+    vk::ImageView colorImageView,
+    vk::Image     depthImage,
+    vk::ImageView depthImageView,
+    vk::Extent2D  extent
+  );
+  void drawScene(vk::raii::CommandBuffer& commandBuffer, vk::Extent2D extent, uint32_t frameIndex);
 
   std::pair<vk::raii::Image, vk::raii::DeviceMemory> createTextureImage(std::string texturePath);
   vk::raii::ImageView createTextureImageView(vk::raii::Image& textureImage);

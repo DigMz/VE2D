@@ -9,7 +9,7 @@ A 2D game engine written in C++20, built directly on Vulkan. Heavily a work in p
 - **Runtime texture array**: textures are loaded lazily at runtime and indexed through a single combined-image-sampler descriptor array (up to 512 textures), so new textures can be registered without rebuilding the pipeline.
 - **Scene graph**: a `Node` → `Node2D` → `Sprite` hierarchy with a Godot-style `init`/`ready`/`process` lifecycle, and parent-relative 2D transform propagation (position, rotation, scale) computed per frame.
 - **Slang shaders**: shader source is written once in [Slang](https://shader-slang.com/) and compiled to SPIR-V at build time.
-- **ImGui debug overlay**: press `F1` in-app to toggle a debug window showing frame time, FPS, quad count, and texture count.
+- **ImGui editor mode**: press `F1` in-app to switch to a Godot-style editor layout: a side panel on the left (an "Add Quad" button plus frame time, FPS, quad count, and texture count) and the game, rendered offscreen, in a "Game" panel on the right.
 
 ## Dependencies
 
@@ -47,10 +47,14 @@ build/VE2D/VE2D
 
 ## Controls
 
-- `W`/`A`/`S`/`D` + mouse — fly camera movement and look
+- `W`/`A`/`S`/`D` — move the camera up/left/down/right
+- Middle mouse drag — pan the camera
+- Scroll wheel / `Space` / `Ctrl` — move the camera forward/back along z
+- In editor mode, the camera controls only respond while the mouse is over the "Game" panel
 - `Space` / `Ctrl` — move up / down
-- `F1` — toggle the debug overlay (releases mouse capture so you can interact with it)
-- `Escape` — close the debug overlay, or toggle mouse capture if it's already closed
+- `Q` — add a quad (same as the editor's "Add Quad" button)
+- `F1` — toggle editor mode (releases mouse capture so you can interact with it)
+- `Escape` — leave editor mode, or toggle mouse capture if it's already closed
 
 ## Project Layout
 
@@ -58,7 +62,7 @@ build/VE2D/VE2D
 - `src/renderer` — the Vulkan rendering pipeline: pipeline/descriptor setup, buffers, textures, and per-frame command recording.
 - `src/scenes` — bridges the node tree to the renderer, pushing sprite transforms and textures into GPU-side data each frame.
 - `src/nodes` — the `Node`/`Node2D`/`Sprite` scene graph and transform propagation.
-- `src/debug` — the ImGui-based debug overlay.
+- `src/debug` — the ImGui-based editor UI.
 - `src/utils` — shared Vulkan and general-purpose helper functions.
 - `src/shaders` — Slang shader source, compiled to SPIR-V at build time.
 
