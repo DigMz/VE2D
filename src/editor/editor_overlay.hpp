@@ -36,7 +36,8 @@ public:
     vk::raii::Queue& queue,
     vk::Format colorFormat,
     vk::Format depthFormat,
-    uint32_t imageCount
+    uint32_t imageCount,
+    uint32_t viewportTextureCount
   );
   ~EditorOverlay();
 
@@ -53,8 +54,7 @@ public:
   void setViewportTextures(vk::Sampler sampler, const std::vector<vk::ImageView>& imageViews);
 
 private:
-  static constexpr uint32_t MAX_VIEWPORT_TEXTURES = 8;
-
+  uint32_t                     viewportTextureCount; // pool capacity for ImGui_ImplVulkan_AddTexture()
   vk::raii::DescriptorPool     descriptorPool = nullptr;
   std::vector<VkDescriptorSet> viewportTextures;
   float smoothedDeltaTime = 0.0f; // EMA, so the displayed FPS isn't noisy frame-to-frame
