@@ -30,7 +30,7 @@ void Application::run() {
 
 	initWindow();
 	initVulkan();
-  initDebugOverlay();
+  initEditorOverlay();
   initScene();
 	mainLoop();
 	cleanup();
@@ -47,13 +47,7 @@ void Application::initWindow() {
     throw std::runtime_error(std::string("SDL_CreateWindow failed") + SDL_GetError());
   }
 
-  glm::vec3 dir;
-  dir.x = cos(glm::radians(cameraYaw)) * cos(glm::radians(cameraPitch));
-  dir.y = sin(glm::radians(cameraPitch));
-  dir.z = sin(glm::radians(cameraYaw)) * cos(glm::radians(cameraPitch));
-  cameraFront = glm::normalize(dir);
-
-  SDL_SetWindowRelativeMouseMode(window, true);
+  input = std::make_unique<InputHandler>(window);
 }
 
 
@@ -89,10 +83,10 @@ void Application::initVulkan() {
 
 }
 
-void Application::initDebugOverlay() {
+void Application::initEditorOverlay() {
   vk::Format depthFormat = vk_util::findDepthFormat(device, physicalDevice);
 
-  debugOverlay = std::make_unique<DebugOverlay>(
+  editorOverlay = std::make_unique<EditorOverlay>(
     window,
     instance,
     physicalDevice,
@@ -101,7 +95,8 @@ void Application::initDebugOverlay() {
     queue,
     swapChainSurfaceFormat.format,
     depthFormat,
-    static_cast<uint32_t>(swapChainImages.size())
+    static_cast<uint32_t>(swapChainImages.size()),
+    static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)
   );
 }
 
@@ -436,10 +431,12 @@ void Application::updateCameraUBOBuffer(uint32_t currentImage) {
   auto currentTime = std::chrono::high_resolution_clock::now();
   float time = std::chrono::duration<float>(currentTime - startTime).count();
 
+  vk::Extent2D targetExtent = renderTargetExtent();
+
   CameraUBO ubo{};
-  ubo.view  = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+  ubo.view  = glm::lookAt(camera.position, camera.position + camera.front, camera.up);
   ubo.proj  =
-    glm::perspective(glm::radians(45.0f), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 100.0f);
+    glm::perspective(glm::radians(camera.fov), static_cast<float>(targetExtent.width) / static_cast<float>(targetExtent.height), 0.1f, 100.0f);
   ubo.proj[1][1] *= -1;
 
   memcpy(cameraUBOsMapped[currentImage], &ubo, sizeof(ubo));
@@ -479,9 +476,10 @@ void Application::drawFrame() {
     depthImageView,
     frameIndex,
     imageIndex,
-    showDebugOverlay
-      ? std::function<void(vk::raii::CommandBuffer&)>([&](vk::raii::CommandBuffer& cb) { debugOverlay->draw(cb); })
-      : nullptr
+    showEditor
+      ? std::function<void(vk::raii::CommandBuffer&)>([&](vk::raii::CommandBuffer& cb) { editorOverlay->draw(cb); })
+      : nullptr,
+    showEditor
   );
 
   vk::PipelineStageFlags waitDestinationStageMask( vk::PipelineStageFlagBits::eColorAttachmentOutput );
@@ -626,17 +624,45 @@ void Application::initScene() {
       cameraUBOs
     )
   ));
+
+  // Give the editor's "Game" panel something to show until it reports its real size
+  resizeViewport(swapChainExtent);
+}
+
+void Application::resizeViewport(vk::Extent2D extent) {
+  Renderer& renderer = currentScene->getRenderer();
+  if (extent.width == 0 || extent.height == 0 || extent == renderer.getViewportExtent()) return;
+
+  renderer.resizeViewport(extent); // waits for the GPU to go idle
+  editorOverlay->setViewportTextures(renderer.getViewportSampler(), renderer.getViewportImageViews());
+}
+
+void Application::setEditorOpen(bool open) {
+  showEditor = open;
+  input->setEditorOpen(open);
+}
+
+void Application::addQuad() {
+  currentScene->addSprite(std::unique_ptr<Sprite>( new Sprite(
+    std::vector<std::unique_ptr<Node>> {},
+    glm::vec3 {static_cast<float>(nextQuadOffset), 0.0f, 0.0f},
+    glm::vec2 {1.0f, 1.0f},
+    glm::vec1 {0.0f}
+  )));
+  nextQuadOffset++;
+  currentScene->printDebug();
 }
 
 void Application::mainLoop() {
-  int quad_offset = 1;
-
   lastFrameTime = std::chrono::high_resolution_clock::now();
 
   while (running) {
+    input->beginFrame();
+
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-      debugOverlay->processEvent(event);
+      editorOverlay->processEvent(event);
+      input->processEvent(event, camera);
 
       switch (event.type) {
         case SDL_EVENT_QUIT:
@@ -649,91 +675,57 @@ void Application::mainLoop() {
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
           framebufferResized = true;
           break;
-        case SDL_EVENT_MOUSE_MOTION:
-          if (mouseCaptured) {
-            cameraYaw   -= event.motion.xrel * mouseSensitivity;
-            cameraPitch += event.motion.yrel * mouseSensitivity;
-            cameraPitch  = std::clamp(cameraPitch, -89.0f, 89.0f);
-
-            glm::vec3 dir;
-            dir.x = cos(glm::radians(cameraYaw)) * cos(glm::radians(cameraPitch));
-            dir.y = sin(glm::radians(cameraPitch));
-            dir.z = sin(glm::radians(cameraYaw)) * cos(glm::radians(cameraPitch));
-            cameraFront = glm::normalize(dir);
-          }
-          break;
-        case SDL_EVENT_KEY_DOWN:
-          if (event.key.scancode == SDL_SCANCODE_F1) {
-            showDebugOverlay = !showDebugOverlay;
-            mouseCaptured = !showDebugOverlay;
-            SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
-          }
-          if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
-            if (showDebugOverlay) {
-              showDebugOverlay = false;
-              mouseCaptured = true;
-            } else {
-              mouseCaptured = !mouseCaptured;
-            }
-            SDL_SetWindowRelativeMouseMode(window, mouseCaptured);
-          }
-          if (event.key.scancode == SDL_SCANCODE_Q) {
-            currentScene->addSprite(std::unique_ptr<Sprite>( new Sprite(
-              std::vector<std::unique_ptr<Node>> {},
-              glm::vec3 {static_cast<float>(quad_offset), 0.0f, 0.0f},
-              glm::vec2 {1.0f, 1.0f},
-              glm::vec1 {0.0f}
-            )));
-            quad_offset++;
-            currentScene->printDebug();
-          }
-          break;
         default:
           break;
       }
     }
+
+    const InputActions& inputActions = input->getActions();
+    if (inputActions.toggleEditor) setEditorOpen(!showEditor);
+    if (inputActions.closeEditor)  setEditorOpen(false);
+    if (inputActions.addQuad)      addQuad();
 
     auto now = std::chrono::high_resolution_clock::now();
     float deltaTime = std::chrono::duration<float>(now - lastFrameTime).count();
     deltaTime = std::min(deltaTime, 0.1f);
     lastFrameTime = now;
 
-    if (!showDebugOverlay) processInput(deltaTime);
-
-    if (showDebugOverlay) {
-      debugOverlay->newFrame();
-      debugOverlay->buildUI(deltaTime, currentScene->getQuadCount(), currentScene->getTextureCount());
+    EditorActions editorActions;
+    if (showEditor) {
+      editorOverlay->newFrame();
+      editorActions = editorOverlay->buildUI(deltaTime, currentScene->getQuadCount(), currentScene->getTextureCount(), frameIndex);
+      if (editorActions.addQuad) addQuad();
     }
+
+    // In the editor, the camera only responds while the mouse is over the "Game" panel.
+    // Mouse events for the next frame are checked against this frame's hover state.
+    input->setGameView(renderTargetExtent(), !showEditor || editorActions.viewportHovered);
+    input->update(deltaTime, camera);
 
     // updateGPUObjectsBuffer();
 
     currentScene->process(deltaTime);
 
     drawFrame();
+
+    // Resize after drawFrame(), since this frame's UI still references the old viewport images
+    if (showEditor) resizeViewport(editorActions.viewportSize);
 	}
 
   device.waitIdle();
 }
 
-void Application::processInput(float deltaTime) {
-  const bool *keys = SDL_GetKeyboardState(nullptr);
-  float velocity = cameraSpeed * deltaTime;
-
-  glm::vec3 right = glm::normalize(glm::cross(cameraFront, cameraUp));
-
-  if (keys[SDL_SCANCODE_W]) cameraPos += cameraUp * velocity;
-  if (keys[SDL_SCANCODE_S]) cameraPos -= cameraUp * velocity;
-  if (keys[SDL_SCANCODE_A]) cameraPos -= right * velocity;
-  if (keys[SDL_SCANCODE_D]) cameraPos += right * velocity;
-  if (keys[SDL_SCANCODE_SPACE])    cameraPos -= cameraFront * velocity;
-  if (keys[SDL_SCANCODE_LCTRL])    cameraPos += cameraFront * velocity;
+// In editor mode the scene is drawn into the "Game" panel, not the whole window
+vk::Extent2D Application::renderTargetExtent() {
+  return showEditor ? currentScene->getRenderer().getViewportExtent() : swapChainExtent;
 }
 
 void Application::cleanup() {
   currentScene.reset();
   // delete currentScene.release();
 
-  debugOverlay.reset();
+  editorOverlay.reset();
+  input.reset();
 
   // Explicitly destroy all Vulkan objects before quitting SDL
   // destroys the Wayland display underneath them

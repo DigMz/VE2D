@@ -1,6 +1,6 @@
 # VE2D
 
-A 2D game engine written in C++20, built directly on Vulkan (via `vk::raii`), using SDL3 for windowing/input, glm for math, Slang for shaders, and Dear ImGui for an in-app debug overlay. Rendering uses Vulkan 1.4 dynamic rendering and `synchronization2` — there is no `VkRenderPass`/`VkFramebuffer` anywhere in the codebase.
+A 2D game engine written in C++20, built directly on Vulkan (via `vk::raii`), using SDL3 for windowing/input, glm for math, Slang for shaders, and Dear ImGui for an in-app editor overlay. Rendering uses Vulkan 1.4 dynamic rendering and `synchronization2` — there is no `VkRenderPass`/`VkFramebuffer` anywhere in the codebase.
 
 ## Build Commands
 
@@ -29,11 +29,13 @@ build/VE2D/VE2D
 
 ## Architecture Map
 
-Ownership chain: `Application` owns a `Scene` and a `DebugOverlay`; `Scene` owns a `Renderer` and the root of a `Node` tree.
+Ownership chain: `Application` owns a `Scene`, a `EditorOverlay`, an `InputHandler` and the `Camera`; `Scene` owns a `Renderer` and the root of a `Node` tree.
 
 ```
 Application
- ├─ DebugOverlay
+ ├─ EditorOverlay
+ ├─ InputHandler
+ ├─ Camera
  └─ Scene
      ├─ Renderer
      └─ Node (root)
@@ -41,11 +43,13 @@ Application
                └─ Sprite
 ```
 
-- **`Application`** (`src/app/app.hpp`, `src/app/app.cpp`) — SDL window creation, full Vulkan bring-up (instance, physical/logical device, swapchain, depth resources, command buffers, sync objects, camera UBOs), the main loop (input, per-frame `drawFrame()`), and swapchain recreation on resize.
+- **`Application`** (`src/app/app.hpp`, `src/app/app.cpp`) — SDL window creation, full Vulkan bring-up (instance, physical/logical device, swapchain, depth resources, command buffers, sync objects, camera UBOs), the main loop (event polling, per-frame `drawFrame()`), and swapchain recreation on resize. It acts on `InputActions` and `EditorActions` but does not interpret mouse or keyboard input itself.
 - **`Scene`** (`src/scenes/scene.hpp`, `src/scenes/scene.cpp`) — the glue between the node tree and the `Renderer`. Walks the tree to register/update `Sprite`s (`pushSpriteDataToRenderer`/`updateSpriteDataOnRenderer`), recomputes global 2D transforms once per frame, and forwards `recordFrame()` to the `Renderer`.
 - **`Node` / `Node2D` / `Sprite`** (`src/nodes/`) — a Godot-style scene graph. `Node` provides the `init`/`ready`/`process` lifecycle (each has a public recursive entry point and a `_init`/`_ready`/`_process` hook for subclasses to override). `Node2D` adds local transform state (position/rotation/scale) and computes parent-relative global transforms via `updateNode2DTransforms()`, which is invoked explicitly by `Scene` rather than as part of the `Node` lifecycle. `Sprite` is the renderable leaf, holding a texture path and an index into the renderer's per-instance object list.
-- **`Renderer`** (`src/renderer/renderer.hpp`, `src/renderer/renderer.cpp`) — owns the graphics pipeline, descriptor sets/layout, the shared unit-quad vertex/index buffers, the per-instance object storage buffer, and the texture array (images/views/samplers). Exposes `addQuadObject`/`updateQuadObject`/`addTexture` for `Scene` to drive, and `recordFrame()` to record the actual draw commands (including an optional callback for the debug overlay to draw into the same render pass).
-- **`DebugOverlay`** (`src/debug/debug_overlay.hpp`, `src/debug/debug_overlay.cpp`) — owns the entire Dear ImGui lifecycle (context, SDL3 backend, Vulkan backend) in isolation, so no other file needs to `#include` ImGui. `Renderer` invokes it only through an optional `std::function` callback.
+- **`Renderer`** (`src/renderer/renderer.hpp`, `src/renderer/renderer.cpp`) — owns the graphics pipeline, descriptor sets/layout, the shared unit-quad vertex/index buffers, the per-instance object storage buffer, and the texture array (images/views/samplers). Exposes `addQuadObject`/`updateQuadObject`/`addTexture` for `Scene` to drive, and `recordFrame()` to record the actual draw commands (including an optional callback for the editor overlay to draw into the same render pass). Also owns an offscreen "viewport" color/depth target per frame in flight (`resizeViewport`), which the scene is drawn into instead of the swapchain when the editor is open.
+- **`EditorOverlay`** (`src/editor/editor_overlay.hpp`, `src/editor/editor_overlay.cpp`) — owns the entire Dear ImGui lifecycle (context, SDL3 backend, Vulkan backend) in isolation, so no other file needs to `#include` ImGui. In editor mode (`F1`) it lays out a left-hand control panel and a right-hand "Game" panel that displays the `Renderer`'s offscreen viewport image; user actions come back to `Application` as an `EditorActions` struct. `Renderer` invokes it only through an optional `std::function` callback.
+- **`InputHandler`** (`src/input/input_handler.hpp`, `src/input/input_handler.cpp`) — mouse and keyboard game controls, separate from ImGui input (which `EditorOverlay` handles). Moves the `Camera` (WASD/Space/Ctrl held keys, middle-drag grab-pan, scroll-wheel zoom along z), owns mouse capture, and reports key shortcuts (`F1`, `Escape` in the editor, `Q`) to `Application` as an `InputActions` struct. `Application` tells it the game view's size and hover state each frame (`setGameView`), so camera controls only respond over the editor's "Game" panel.
+- **`Camera`** (`src/input/camera.hpp`) — plain camera state (position/front/up/fov). `Application` builds the camera UBO from it.
 - **`src/utils/vulkan_utils.hpp`** — shared Vulkan helpers (buffer/image creation, memory type lookup, layout transitions, one-shot command buffers) and the core data structs used across the pipeline: `Vertex`, `QuadObject` (CPU-side per-sprite data), `CameraUBO`, `GPUObject` (GPU-side per-instance data).
 - **`src/utils/utils.hpp`** — general helpers: `readFile` (binary file loading, used for SPIR-V) and 2D vector rotation helpers.
 - **`src/shaders/shader.slang`** — single Slang source with `vertMain`/`fragMain` entry points, compiled by CMake via `slangc` into `src/shaders/slang.spv`.

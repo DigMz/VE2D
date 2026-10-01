@@ -24,7 +24,7 @@ All Vulkan setup is driven by `Application` (`src/app/app.cpp`), using `vk::raii
 2. Acquire the next swapchain image (`acquireNextImage`), signaling `presentCompleteSemaphores[frameIndex]`. On `eErrorOutOfDateKHR`, calls `recreateSwapChain()` and skips the rest of the frame.
 3. Recompute the camera's view/projection matrices (`glm::lookAt` / Y-flipped `glm::perspective`) and copy them into the current frame's camera UBO.
 4. Reset the fence and the frame's command buffer.
-5. Delegate to `Scene::recordFrame()` → `Renderer::recordFrame()` to record the actual draw commands (see below), passing an optional overlay-draw callback when the debug overlay is visible.
+5. Delegate to `Scene::recordFrame()` → `Renderer::recordFrame()` to record the actual draw commands (see below), passing an optional overlay-draw callback when the editor overlay is visible.
 6. Submit the command buffer, waiting on `presentCompleteSemaphores[frameIndex]` at the color-attachment-output stage and signaling `renderFinishedSemaphores[imageIndex]`, fenced by `inFlightFences[frameIndex]`.
 7. Present, waiting on `renderFinishedSemaphores[imageIndex]`; on suboptimal/out-of-date or a pending resize, calls `recreateSwapChain()`.
 8. Advance `frameIndex` modulo `MAX_FRAMES_IN_FLIGHT`.
@@ -35,14 +35,17 @@ Note the semaphore indexing: `presentCompleteSemaphores`/`inFlightFences` are in
 
 1. `updateGPUObjectsBuffer()` — rebuild and upload the current frame's per-instance data (see Data Flow below).
 2. Begin the command buffer.
-3. Barrier the swapchain image `eUndefined` → `eColorAttachmentOptimal`, and the depth image `eUndefined` → `eDepthAttachmentOptimal` (via `pipelineBarrier2`).
-4. `beginRendering()` with one color attachment (clear to black, store) and one depth attachment (clear to 1.0, don't-care store) — dynamic rendering, no render pass/framebuffer objects.
-5. Bind the pipeline, set dynamic viewport/scissor to the full swapchain extent, bind the shared vertex/index buffers, bind the current frame's descriptor set.
-6. `drawIndexed(6, instanceCount, 0, 0, 0)` — one instanced draw for every sprite in the scene.
-7. If an overlay-draw callback was supplied, invoke it here — **inside** the same dynamic-rendering scope, so the debug UI composites onto the same color/depth attachments as the scene, in the same render pass instance.
-8. `endRendering()`.
-9. Barrier the swapchain image `eColorAttachmentOptimal` → `ePresentSrcKHR`.
-10. End the command buffer.
+3. Scene pass (`beginPass()` + `drawScene()`):
+   - `beginPass()` barriers the color target `eUndefined` → `eColorAttachmentOptimal` and the depth target `eUndefined` → `eDepthAttachmentOptimal` (via `pipelineBarrier2`), then calls `beginRendering()` with one color attachment (clear to black, store) and one depth attachment (clear to 1.0, don't-care store). This is dynamic rendering, with no render pass/framebuffer objects.
+   - `drawScene()` binds the pipeline, sets the dynamic viewport/scissor to the target's extent, binds the shared vertex/index buffers and the current frame's descriptor set, then issues `drawIndexed(6, instanceCount, 0, 0, 0)`. That is one instanced draw for every sprite.
+   - **Game mode** (`sceneToViewport = false`): the targets are the swapchain image and the app's depth image.
+   - **Editor mode** (`sceneToViewport = true`): the targets are this frame-in-flight's offscreen viewport color/depth images (sized to the editor's "Game" panel). After `endRendering()`, the viewport color image is barriered to `eShaderReadOnlyOptimal`, and a second `beginPass()` opens on the swapchain image, which holds only the UI.
+4. If an overlay-draw callback was supplied, invoke it inside the currently open rendering scope (the swapchain pass). In editor mode, ImGui samples the viewport image as a texture in its "Game" panel.
+5. `endRendering()`.
+6. Barrier the swapchain image `eColorAttachmentOptimal` → `ePresentSrcKHR`.
+7. End the command buffer.
+
+The viewport targets are created by `Renderer::resizeViewport()`, which waits for the device to go idle before reallocating. `Application` calls it after `drawFrame()` whenever the "Game" panel's pixel size changes, then re-registers the new image views with ImGui through `EditorOverlay::setViewportTextures()`. While the editor is open, the camera projection uses the viewport's aspect ratio instead of the swapchain's.
 
 ## Data Flow: Sprites to GPU
 

@@ -32,7 +32,9 @@ import vulkan.hpp;
 #include <tiny_obj_loader.h>
 
 #include "scenes/scene.hpp"
-#include "debug/debug_overlay.hpp"
+#include "editor/editor_overlay.hpp"
+#include "input/camera.hpp"
+#include "input/input_handler.hpp"
 
 const uint32_t WIDTH  = 800;
 const uint32_t HEIGHT = 600;
@@ -92,19 +94,12 @@ private:
   uint32_t                             frameIndex         = 0;
   bool                                 framebufferResized = false;
 
-  glm::vec3 cameraPos   = {0.0f, 0.0f, 2.0f};
-  glm::vec3 cameraFront = glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f));
-  glm::vec3 cameraUp    = {0.0f, -1.0f, 0.0f};
-  float     cameraYaw   = -90.0f;
-  float     cameraPitch = 0.0f;
-  float     cameraSpeed = 3.0f; // units/sec
+  Camera                        camera;
+  std::unique_ptr<InputHandler> input = nullptr;
 
-  bool  mouseCaptured = true;
-  float mouseSensitivity = 0.1f;
+  vk::Extent2D renderTargetExtent();
 
   std::chrono::high_resolution_clock::time_point lastFrameTime;
-
-  void processInput(float deltaTime);
 
   std::vector<const char *> requiredDeviceExtension = {
     vk::KHRSwapchainExtensionName
@@ -112,8 +107,13 @@ private:
 
   std::unique_ptr<Scene> currentScene = nullptr;
 
-  std::unique_ptr<DebugOverlay> debugOverlay = nullptr;
-  bool showDebugOverlay = false;
+  std::unique_ptr<EditorOverlay> editorOverlay = nullptr;
+  bool showEditor = false; // F1: editor UI with the game in a panel, vs. fullscreen game
+
+  int nextQuadOffset = 1;
+  void setEditorOpen(bool open);
+  void addQuad();
+  void resizeViewport(vk::Extent2D extent);
 
   static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT       severity,
                                                         vk::DebugUtilsMessageTypeFlagsEXT              type,
@@ -127,7 +127,7 @@ private:
 
 	void initWindow();
 	void initVulkan();
-  void initDebugOverlay();
+  void initEditorOverlay();
   void initScene();
 
   void createInstance();

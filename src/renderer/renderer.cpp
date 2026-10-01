@@ -22,6 +22,7 @@ void Renderer::init() {
   createGPUObjectsBuffer();
   createDescriptorPool();
   createDescriptorSets();
+  createViewportSampler();
 }
 
 std::pair<vk::raii::Image, vk::raii::DeviceMemory> Renderer::createTextureImage(std::string texturePath) {
@@ -209,7 +210,9 @@ void Renderer::createGraphicsPipeline() {
     .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
     .colorBlendOp        = vk::BlendOp::eAdd,
     .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-    .dstAlphaBlendFactor = vk::BlendFactor::eZero,
+    // "Over" for alpha too, so transparent texels don't punch holes in the
+    // opaque clear - the editor's Game panel alpha-blends this image.
+    .dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
     .alphaBlendOp        = vk::BlendOp::eAdd,
     .colorWriteMask      = vk::ColorComponentFlagBits::eR |
                            vk::ColorComponentFlagBits::eG | 
@@ -567,25 +570,19 @@ void Renderer::transition_image_layout(
   commandBuffer.pipelineBarrier2(dependencyInfo);
 }
 
-void Renderer::recordFrame(
+// Transitions the given color/depth attachments for writing and begins a
+// dynamic-rendering pass that clears both.
+void Renderer::beginPass(
   vk::raii::CommandBuffer& commandBuffer,
-  vk::Image swapChainImage,
-  vk::Extent2D swapChainExtent,
-  vk::raii::ImageView& swapChainImageView,
-  vk::raii::Image& depthImage,
-  vk::raii::ImageView& depthImageView,
-  uint32_t frameIndex,
-  unsigned int imageIndex,
-  std::function<void(vk::raii::CommandBuffer&)> overlayDraw
+  vk::Image     colorImage,
+  vk::ImageView colorImageView,
+  vk::Image     depthImage,
+  vk::ImageView depthImageView,
+  vk::Extent2D  extent
 ) {
-  updateGPUObjectsBuffer();
-
-  commandBuffer.begin({});
-
-  // Before strating render, transition the swapchain image to vk::ImageLayout::eColorAttachmentOptimal
   transition_image_layout(
     commandBuffer,
-    swapChainImage,
+    colorImage,
     vk::ImageLayout::eUndefined,
     vk::ImageLayout::eColorAttachmentOptimal,
     {},
@@ -597,7 +594,7 @@ void Renderer::recordFrame(
 
   transition_image_layout(
     commandBuffer,
-    *depthImage,
+    depthImage,
     vk::ImageLayout::eUndefined,
     vk::ImageLayout::eDepthAttachmentOptimal,
     vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
@@ -610,7 +607,7 @@ void Renderer::recordFrame(
   vk::ClearValue              clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
   vk::ClearValue              clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
   vk::RenderingAttachmentInfo attachmentInfo = {
-    .imageView   = swapChainImageView,
+    .imageView   = colorImageView,
     .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
     .loadOp      = vk::AttachmentLoadOp::eClear,
     .storeOp     = vk::AttachmentStoreOp::eStore,
@@ -627,7 +624,7 @@ void Renderer::recordFrame(
   vk::RenderingInfo renderingInfo = {
     .renderArea = {
       .offset = {0, 0},
-      .extent = swapChainExtent
+      .extent = extent
     },
     .layerCount           = 1,
     .colorAttachmentCount = 1,
@@ -636,15 +633,61 @@ void Renderer::recordFrame(
   };
 
   commandBuffer.beginRendering(renderingInfo);
+}
 
+void Renderer::drawScene(vk::raii::CommandBuffer& commandBuffer, vk::Extent2D extent, uint32_t frameIndex) {
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
-  commandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
-  commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
+  commandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f));
+  commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
   commandBuffer.bindVertexBuffers(0, *vertexBuffer, {0});
   commandBuffer.bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint32);
 
   commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets[frameIndex], nullptr);
   commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), gpuObjects.size(), 0, 0, 0);
+}
+
+void Renderer::recordFrame(
+  vk::raii::CommandBuffer& commandBuffer,
+  vk::Image swapChainImage,
+  vk::Extent2D swapChainExtent,
+  vk::raii::ImageView& swapChainImageView,
+  vk::raii::Image& depthImage,
+  vk::raii::ImageView& depthImageView,
+  uint32_t frameIndex,
+  unsigned int imageIndex,
+  std::function<void(vk::raii::CommandBuffer&)> overlayDraw,
+  bool sceneToViewport
+) {
+  updateGPUObjectsBuffer();
+
+  commandBuffer.begin({});
+
+  if (sceneToViewport) {
+    // Pass 1: draw the scene into this frame's offscreen viewport image...
+    ViewportTarget& target = viewportTargets[frameIndex];
+    beginPass(commandBuffer, *target.colorImage, *target.colorImageView, *target.depthImage, *target.depthImageView, viewportExtent);
+    drawScene(commandBuffer, viewportExtent, frameIndex);
+    commandBuffer.endRendering();
+
+    // ...then make it readable by the UI's fragment shader.
+    transition_image_layout(
+      commandBuffer,
+      *target.colorImage,
+      vk::ImageLayout::eColorAttachmentOptimal,
+      vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2::eColorAttachmentWrite,
+      vk::AccessFlagBits2::eShaderSampledRead,
+      vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+      vk::PipelineStageFlagBits2::eFragmentShader,
+      vk::ImageAspectFlagBits::eColor
+    );
+
+    // Pass 2: the swapchain only holds the UI, which samples the image above.
+    beginPass(commandBuffer, swapChainImage, *swapChainImageView, *depthImage, *depthImageView, swapChainExtent);
+  } else {
+    beginPass(commandBuffer, swapChainImage, *swapChainImageView, *depthImage, *depthImageView, swapChainExtent);
+    drawScene(commandBuffer, swapChainExtent, frameIndex);
+  }
 
   if (overlayDraw) overlayDraw(commandBuffer);
 
@@ -664,6 +707,71 @@ void Renderer::recordFrame(
   );
 
   commandBuffer.end();
+}
+
+void Renderer::createViewportSampler() {
+  vk::SamplerCreateInfo samplerInfo {
+    .magFilter    = vk::Filter::eLinear,
+    .minFilter    = vk::Filter::eLinear,
+    .mipmapMode   = vk::SamplerMipmapMode::eLinear,
+    .addressModeU = vk::SamplerAddressMode::eClampToEdge,
+    .addressModeV = vk::SamplerAddressMode::eClampToEdge,
+    .addressModeW = vk::SamplerAddressMode::eClampToEdge,
+  };
+  viewportSampler = vk::raii::Sampler(device, samplerInfo);
+}
+
+void Renderer::resizeViewport(vk::Extent2D extent) {
+  if (extent.width == 0 || extent.height == 0) return;
+  if (extent == viewportExtent && !viewportTargets.empty()) return;
+
+  device.waitIdle(); // the old targets may still be in use by frames in flight
+  viewportTargets.clear();
+
+  // Same color/depth formats as the swapchain pass, so the one graphics
+  // pipeline can render into either.
+  vk::Format colorFormat = swapChainSurfaceFormat.format;
+  vk::Format depthFormat = vk_util::findDepthFormat(device, physicalDevice);
+
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    ViewportTarget target;
+
+    std::tie(target.colorImage, target.colorImageMemory) = vk_util::createImage(
+      device,
+      physicalDevice,
+      extent.width,
+      extent.height,
+      colorFormat,
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+    target.colorImageView = vk_util::createImageView(device, target.colorImage, colorFormat, vk::ImageAspectFlagBits::eColor);
+
+    std::tie(target.depthImage, target.depthImageMemory) = vk_util::createImage(
+      device,
+      physicalDevice,
+      extent.width,
+      extent.height,
+      depthFormat,
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eDepthStencilAttachment,
+      vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+    target.depthImageView = vk_util::createImageView(device, target.depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth);
+
+    viewportTargets.push_back(std::move(target));
+  }
+
+  viewportExtent = extent;
+}
+
+std::vector<vk::ImageView> Renderer::getViewportImageViews() const {
+  std::vector<vk::ImageView> views;
+  for (const ViewportTarget& target : viewportTargets) {
+    views.push_back(*target.colorImageView);
+  }
+  return views;
 }
 
 int Renderer::addTexture(std::string texturePath) {
