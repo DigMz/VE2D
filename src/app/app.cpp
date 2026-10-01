@@ -95,7 +95,8 @@ void Application::initEditorOverlay() {
     queue,
     swapChainSurfaceFormat.format,
     depthFormat,
-    static_cast<uint32_t>(swapChainImages.size())
+    static_cast<uint32_t>(swapChainImages.size()),
+    static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)
   );
 }
 

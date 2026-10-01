@@ -17,8 +17,9 @@ EditorOverlay::EditorOverlay(
   vk::raii::Queue& queue,
   vk::Format colorFormat,
   vk::Format depthFormat,
-  uint32_t imageCount
-) {
+  uint32_t imageCount,
+  uint32_t viewportTextureCount
+) : viewportTextureCount(viewportTextureCount) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGui::GetIO().IniFilename = nullptr; // nothing worth persisting yet (fixed layout)
@@ -32,13 +33,13 @@ EditorOverlay::EditorOverlay(
   // descriptors for the backend's own samplers.
   std::array<vk::DescriptorPoolSize, 2> poolSizes {{
     { .type = vk::DescriptorType::eSampledImage,
-      .descriptorCount = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE + MAX_VIEWPORT_TEXTURES },
+      .descriptorCount = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE + viewportTextureCount },
     { .type = vk::DescriptorType::eSampler,
       .descriptorCount = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE },
   }};
   vk::DescriptorPoolCreateInfo poolInfo {
     .flags         = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-    .maxSets       = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE + MAX_VIEWPORT_TEXTURES
+    .maxSets       = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE + viewportTextureCount
                    + IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE,
     .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
     .pPoolSizes    = poolSizes.data()
@@ -162,7 +163,7 @@ void EditorOverlay::setViewportTextures(vk::Sampler sampler, const std::vector<v
   }
   viewportTextures.clear();
 
-  if (imageViews.size() > MAX_VIEWPORT_TEXTURES) {
+  if (imageViews.size() > viewportTextureCount) {
     throw std::runtime_error("EditorOverlay: too many viewport textures for its descriptor pool");
   }
   for (vk::ImageView imageView : imageViews) {
