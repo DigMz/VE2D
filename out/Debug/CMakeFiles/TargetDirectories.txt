@@ -1,4 +1,0 @@
-/home/digmz/Projects/C++/VE2D/out/Debug/CMakeFiles/VE2D.dir
-/home/digmz/Projects/C++/VE2D/out/Debug/CMakeFiles/VE2DShader.dir
-/home/digmz/Projects/C++/VE2D/out/Debug/CMakeFiles/edit_cache.dir
-/home/digmz/Projects/C++/VE2D/out/Debug/CMakeFiles/rebuild_cache.dir

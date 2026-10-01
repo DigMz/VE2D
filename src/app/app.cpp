@@ -649,7 +649,6 @@ void Application::addQuad() {
     glm::vec1 {0.0f}
   )));
   nextQuadOffset++;
-  currentScene->printDebug();
 }
 
 void Application::mainLoop() {

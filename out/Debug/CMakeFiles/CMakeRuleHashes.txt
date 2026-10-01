@@ -1,4 +1,0 @@
-# Hashes of file build rules.
-2434886f53147ebfd6322622f8c49383 /home/digmz/Projects/C++/VE2D/src/shaders
-773b33dc737f13020f27ab29488bd9a7 /home/digmz/Projects/C++/VE2D/src/shaders/slang.spv
-e68184184ec7936ab40f4bc20be4993e CMakeFiles/VE2DShader
