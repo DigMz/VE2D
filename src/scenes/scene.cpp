@@ -40,7 +40,7 @@ void Scene::updateSpriteDataOnRenderer(Sprite &sprite) {
 
   renderer->updateQuadObject({
     .position = {-sprite.get_global_position().x, sprite.get_global_position().y, -sprite.get_global_position().z},
-    .rotation = sprite.get_global_rotation().x,
+    .rotation = -sprite.get_global_rotation().x,
     .scale = {sprite.get_global_scale().x, sprite.get_global_scale().y},
     .color = {1.0f, 1.0f, 1.0f},
     .textureIndex = static_cast<uint32_t>(sprite.textureId)
@@ -78,6 +78,7 @@ void Scene::process(float deltaTime) {
     if (Sprite* sprite = dynamic_cast<Sprite*>(node.get())) {
       if (sprite->dirty) {
         updateSpriteDataOnRenderer(*sprite);
+        sprite->dirty = false;
       }
     }
   });

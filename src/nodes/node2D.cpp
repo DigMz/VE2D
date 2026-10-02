@@ -43,7 +43,8 @@ glm::vec3 rotate_position(glm::vec3 position, glm::vec1 rotation) {
 
 void Node2D::updateTransform() {
   if (Node2D* parent2D = dynamic_cast<Node2D*>(parent)) {
-    glm::vec3 rotated_position = rotate_position(position, rotation);
+    global_rotation = parent2D->global_rotation + rotation;
+    glm::vec3 rotated_position = rotate_position(position, global_rotation);
     global_position = parent2D->global_position + glm::vec3({
       rotated_position.x * parent2D->global_scale.x,
       rotated_position.y * parent2D->global_scale.y,
@@ -53,7 +54,6 @@ void Node2D::updateTransform() {
       parent2D->global_scale.x * scale.x,
       parent2D->global_scale.y * scale.y
     };
-    global_rotation = parent2D->global_rotation + rotation;
   } else {
     global_position = position;
     global_scale = scale;

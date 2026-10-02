@@ -1,8 +1,13 @@
 #include "editor_overlay.hpp"
 
+#include "nodes/node.hpp"
+#include "nodes/node2D.hpp"
+
+#include <glm/fwd.hpp>
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
+#include <imgui_stdlib.h>
 
 #include <algorithm>
 #include <array>
@@ -101,7 +106,35 @@ void EditorOverlay::newFrame() {
   ImGui::NewFrame();
 }
 
-EditorActions EditorOverlay::buildUI(float deltaTime, size_t quadCount, size_t textureCount, uint32_t frameIndex) {
+void EditorOverlay::drawNodeTree(Node& node) {
+  ImGui::PushID(&node); // node.name isn't unique across siblings; key on identity instead
+  ImGuiTreeNodeFlags flags =
+    ImGuiTreeNodeFlags_OpenOnArrow |
+    ImGuiTreeNodeFlags_OpenOnDoubleClick |
+    ImGuiTreeNodeFlags_DefaultOpen;
+  if (&node == selectedNode) {
+    flags |= ImGuiTreeNodeFlags_Selected;
+  }
+  bool isLeaf = node.children.empty();
+  if (isLeaf) {
+    flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+  }
+  bool open = ImGui::TreeNodeEx(node.name.c_str(), flags);
+  if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+    selectedNode = &node;
+  }
+  if (open) {
+    for (const std::unique_ptr<Node>& child : node.children) {
+      drawNodeTree(*child);
+    }
+    if (!isLeaf) {
+      ImGui::TreePop();
+    }
+  }
+  ImGui::PopID();
+}
+
+EditorActions EditorOverlay::buildUI(float deltaTime, size_t quadCount, size_t textureCount, uint32_t frameIndex, Node& root) {
   constexpr float smoothing = 0.1f;
   smoothedDeltaTime = smoothedDeltaTime <= 0.0f
     ? deltaTime
@@ -130,6 +163,29 @@ EditorActions EditorOverlay::buildUI(float deltaTime, size_t quadCount, size_t t
   ImGui::Text("FPS: %.1f", smoothedDeltaTime > 0.0f ? 1.0f / smoothedDeltaTime : 0.0f);
   ImGui::Text("Quads: %zu", quadCount);
   ImGui::Text("Textures: %zu", textureCount);
+
+  if (selectedNode == nullptr) {
+    ImGui::SeparatorText("No Node Selected");
+  } else {
+    ImGui::SeparatorText("Selected Node");
+    ImGui::InputText("Name", &selectedNode->name);
+    if (auto node2D = dynamic_cast<Node2D*>(selectedNode)) {
+      ImGui::DragFloat3("Position: ", (float*)&node2D->position, 0.05, -10, 10);
+      ImGui::DragFloat("Rotation: ", (float*)&node2D->rotation, 0.05, 0, 360);
+      ImGui::DragFloat2("Scale: ", (float*)&node2D->scale, 0.05, -10, 10);
+      glm::vec3 global_pos = node2D->get_global_position();
+      glm::vec1 global_rot = node2D->get_global_rotation();
+      ImGui::Text("Global Position: %.1f, %.1f, %.1f", global_pos.x, global_pos.y, global_pos.z);
+      ImGui::Text("Global Rotation: %.1f", global_rot.x);
+    }
+  }
+
+  ImGui::SeparatorText("Hierarchy");
+  ImGui::BeginChild("HierarchyRegion", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+  drawNodeTree(root);
+  ImGui::EndChild();
+  actions.selectedNode = selectedNode;
+
   ImGui::End();
 
   // Right: the game, rendered offscreen by the Renderer and shown as an image.

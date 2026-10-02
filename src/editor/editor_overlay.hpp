@@ -12,11 +12,14 @@ import vulkan.hpp;
 
 #include <SDL3/SDL.h>
 
+class Node;
+
 // What the user did in the editor UI this frame, for Application to act on.
 struct EditorActions {
   bool         addQuad      = false;
   vk::Extent2D viewportSize = {0, 0}; // pixel size of the "Game" panel's image area
   bool         viewportHovered = false; // mouse is over the "Game" panel
+  Node*        selectedNode = nullptr; // node clicked in the Hierarchy panel, if any
 };
 
 // Owns the entire Dear ImGui lifecycle (context + SDL3 + Vulkan backends) so
@@ -46,7 +49,7 @@ public:
 
   void processEvent(const SDL_Event& event);
   void newFrame();
-  EditorActions buildUI(float deltaTime, size_t quadCount, size_t textureCount, uint32_t frameIndex);
+  EditorActions buildUI(float deltaTime, size_t quadCount, size_t textureCount, uint32_t frameIndex, Node& root);
   void draw(vk::raii::CommandBuffer& commandBuffer);
 
   // Registers the Renderer's viewport images (indexed by frame in flight) as
@@ -58,4 +61,7 @@ private:
   vk::raii::DescriptorPool     descriptorPool = nullptr;
   std::vector<VkDescriptorSet> viewportTextures;
   float smoothedDeltaTime = 0.0f; // EMA, so the displayed FPS isn't noisy frame-to-frame
+  Node* selectedNode = nullptr; // persists across frames so selection survives redraws
+
+  void drawNodeTree(Node& node);
 };

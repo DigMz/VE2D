@@ -1,0 +1,61 @@
+TODO: fix Node2D global transform propagation + addQuad parenting
+
+[ ] src/nodes/node.hpp
+    - Add non-template addChild(std::unique_ptr<Node> child) overload that
+      sets child->parent = this before push_back (runtime attachment never
+      set parent before; only Node::init() did, once, at startup).
+    - Have the existing templated addChild<T>(Args&&...) delegate to the new
+      overload instead of duplicating push_back.
+
+[ ] src/nodes/node2D.hpp / node2D.cpp
+    - Add `bool transformDirty` to Node2D.
+    - In Node2D::updateTransform(), compute each frame:
+        transformDirty = (local position/scale/rotation changed since last
+        frame) || (parent2D && parent2D->transformDirty)
+      Relies on pre-order walk (parent updates before children) so a
+      rotated parent's transformDirty is already final when each child
+      computes its own.
+    - Add lastPosition/lastScale/lastRotation members to Node2D to support
+      the local-change check above.
+
+[ ] src/nodes/sprite.hpp / sprite.cpp
+    - Remove now-redundant lastPosition/lastScale/lastRotation local-diffing
+      from Sprite (Node2D owns this now).
+    - Sprite::_process only needs to track lastTexturePath for its own
+      `dirty` flag.
+
+[ ] src/scenes/scene.cpp
+    - Scene::process: change render-push condition to
+        if (sprite->dirty || sprite->transformDirty)
+      Keep this check after updateNode2DTransforms(*root) so both flags are
+      fresh for the current frame.
+
+[ ] src/scenes/scene.hpp / scene.cpp
+    - Scene::addSprite: add optional `Node* parent = nullptr` param
+      (default -> root.get()).
+    - Attach via the new Node::addChild(unique_ptr<Node>) overload so
+      `parent` gets set correctly.
+    - Call updateNode2DTransforms(*root) to refresh cached globals BEFORE
+      pushSpriteDataToRenderer (fixes stale-read-before-attach ordering).
+
+[ ] src/app/app.hpp / app.cpp
+    - Application::addQuad(Node* parent = nullptr) forwards to
+      Scene::addSprite.
+    - Editor "Add Quad" button path (app.cpp:695, inside `if (showEditor)`):
+      pass editorActions.selectedNode as parent, so a quad added while a
+      node is selected in the Hierarchy panel becomes its child and
+      inherits its transform.
+    - Q-key shortcut path (app.cpp:684, fires before editorActions exists):
+      leave as addQuad() with no parent -> defaults to root.
+
+[ ] Build + manual verification
+    - make conf_debug && make compile
+    - F1 to open editor; rotate a parent node in the inspector, confirm
+      child sprites rotate immediately without touching their own values.
+    - Select a node in the Hierarchy panel, click "Add Quad", confirm the
+      new quad appears nested under it and inherits its transform.
+    - Press Q (no selection/editor context) to confirm quads still default
+      to attaching under root as before.
+
+
+Make more sophisticated way of making sprite dirty than just checking itself every damn frame

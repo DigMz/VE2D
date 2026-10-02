@@ -41,6 +41,7 @@ public:
   size_t getQuadCount() const { return renderer->getQuadCount(); }
   size_t getTextureCount() const { return renderer->getTextureCount(); }
   Renderer& getRenderer() { return *renderer; }
+  Node& getRoot() { return *root; }
 
   template<std::derived_from<Node> T, class... Args>
   void addNodeToRoot(Args&&... args) {

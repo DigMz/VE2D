@@ -51,17 +51,15 @@ void Sprite::_ready() {
 }
 
 void Sprite::_process(float deltaTime) {
-  rotation += std::numbers::pi * deltaTime;
-
-  if (lastPosition != position ||
-      lastScale != scale       ||
-      lastRotation != rotation ||
+  if (lastPosition != global_position ||
+      lastScale != global_scale       ||
+      lastRotation != global_rotation ||
       lastTexturePath != texturePath
   ) { dirty = true; }
 
-  lastPosition = position;
-  lastScale = scale;
-  lastRotation = rotation;
+  lastPosition = global_position;
+  lastScale = global_scale;
+  lastRotation = global_rotation;
   lastTexturePath = texturePath;
 }
 

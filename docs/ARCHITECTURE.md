@@ -51,6 +51,7 @@ The viewport targets are created by `Renderer::resizeViewport()`, which waits fo
 
 - `QuadObject` (`src/utils/vulkan_utils.hpp`) is the CPU-facing, per-sprite struct: position, rotation (Z-only), scale, color, texture index.
 - `Scene::pushSpriteDataToRenderer()` (called once per `Sprite` during `Scene::init()`) and `Scene::updateSpriteDataOnRenderer()` (called each frame for sprites whose `dirty` flag is set) read a sprite's **global** transform and call `Renderer::addQuadObject()`/`updateQuadObject()` to register/update its `QuadObject`.
+- `Sprite::dirty` is set by diffing the sprite's cached **global** position/scale/rotation against last frame's cached values (`Sprite::_process`), not just its local fields — this is what lets a child sprite re-upload when an ancestor's transform changes it, rather than only when its own local fields are edited. Because this diff runs (as part of `Node::process()`) before `Scene::process()`'s own `updateNode2DTransforms()` pass refreshes the current frame's globals, a transform change propagated down from an ancestor is only detected one frame after the ancestor moved. `dirty` is cleared immediately after `Scene::process()` pushes the update.
 - `Renderer::updateGPUObjects()` rebuilds a `std::vector<GPUObject>` from the current `QuadObject`s once per frame, computing a full model matrix (`translate * rotateZ * scale`) per object via glm.
 - `GPUObject` (`src/utils/vulkan_utils.hpp`) is the GPU-facing struct — `model` (mat4), `color` (vec3), `textureIndex` — written into a storage buffer bound at descriptor binding 1.
 - `Renderer::updateGPUObjectsBuffer()` copies the rebuilt array into the storage buffer each frame; if the required size exceeds current capacity, it grows the buffer (doubling), recreates it, and rewrites binding 1 in every per-frame descriptor set. Initial capacity is `sizeof(GPUObject) * 10000`.
@@ -93,13 +94,14 @@ Compiled by CMake via `slangc -target spirv -profile spirv_1_4 -emit-spirv-direc
 
 `Node2D::updateTransform()`:
 
-1. Rotates the node's local `position` by its own `rotation` (2D rotation applied to x/y; z untouched).
-2. If the parent is also a `Node2D`:
-   - `global_position = parent.global_position + (rotated local position, scaled by parent.global_scale, z left unscaled)`
+1. If the parent is also a `Node2D`:
+   - `global_rotation = parent.global_rotation + rotation` — computed first, since the next step rotates by the accumulated global angle, not just this node's own local `rotation`.
+   - The local `position` is rotated by that `global_rotation` (2D rotation applied to x/y; z untouched), then: `global_position = parent.global_position + (rotated local position, scaled by parent.global_scale, z left unscaled)`.
    - `global_scale = parent.global_scale * scale` (component-wise)
-   - `global_rotation = parent.global_rotation + rotation`
-3. If there is no `Node2D` parent (root, or the parent is a plain `Node`), the globals are just set equal to the locals.
-4. After updating itself, it recurses into its children via `updateNode2DTransforms()`, so children always see an already-updated parent global transform.
+2. If there is no `Node2D` parent (root, or the parent is a plain `Node`), the globals are just set equal to the locals.
+3. After updating itself, it recurses into its children via `updateNode2DTransforms()`, so children always see an already-updated parent global transform.
+
+Rotating by the accumulated `global_rotation` (rather than the node's own local `rotation`) is what makes a child correctly orbit around an already-rotated parent instead of only spinning in place around its own local offset.
 
 `updateNode2DTransforms(Node&)` walks a subtree looking for `Node2D` instances. If a node in the tree isn't itself a `Node2D`, the walk still recurses into its children, so non-`Node2D` intermediate nodes don't block propagation to `Node2D` descendants further down the tree.
 

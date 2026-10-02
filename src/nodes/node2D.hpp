@@ -30,7 +30,7 @@ public:
   glm::vec2 get_global_scale();
   glm::vec1 get_global_rotation();
 
-private:
+protected:
   glm::vec3 global_position;
   glm::vec2 global_scale;
   glm::vec1 global_rotation;
