@@ -19,17 +19,19 @@ public:
 
   void virtual init();
   void virtual ready();
-  void virtual process(float deltaTime);
+  void virtual process(float deltaTime, bool temporal);
 
   template<std::derived_from<Node> T, class... Args>
   void addChild(Args&&... args) {
     children.push_back(std::make_unique<T>(std::forward<Args>(args)...));
   }
 
+  void switchParent(Node* parent);
+
 protected:
   Node* parent = nullptr;
 
   void virtual _init(); // Called before children's init
   void virtual _ready(); // Called after children's ready
-  void virtual _process(float deltaTime); // Called every frame
+  void virtual _process(float deltaTime, bool temporal); // Called every frame
 };

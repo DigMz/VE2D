@@ -654,6 +654,8 @@ void Application::addQuad() {
 void Application::mainLoop() {
   lastFrameTime = std::chrono::high_resolution_clock::now();
 
+  setEditorOpen(true);
+
   while (running) {
     input->beginFrame();
 
@@ -702,7 +704,7 @@ void Application::mainLoop() {
 
     // updateGPUObjectsBuffer();
 
-    currentScene->process(deltaTime);
+    currentScene->process(deltaTime, !showEditor);
 
     drawFrame();
 

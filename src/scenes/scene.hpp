@@ -20,7 +20,7 @@ public:
   {
     init();
   }
-  void process(float deltaTime);
+  void process(float deltaTime, bool temporal);
   void recordFrame(
     vk::raii::CommandBuffer& commandBuffer,
     vk::Image swapChainImage,

@@ -1,4 +1,3 @@
-TODO: fix Node2D global transform propagation + addQuad parenting
 
 [ ] src/nodes/node.hpp
     - Add non-template addChild(std::unique_ptr<Node> child) overload that
@@ -58,4 +57,3 @@ TODO: fix Node2D global transform propagation + addQuad parenting
       to attaching under root as before.
 
 
-Make more sophisticated way of making sprite dirty than just checking itself every damn frame

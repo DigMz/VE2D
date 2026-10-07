@@ -32,11 +32,15 @@ void Node::ready() {
   }
   _ready();
 }
-void Node::process(float deltaTime) {
+void Node::process(float deltaTime, bool temporal) {
   for (std::unique_ptr<Node> &child : children) {
-    child->process(deltaTime);
+    child->process(deltaTime, temporal);
   }
-  _process(deltaTime);
+  _process(deltaTime, temporal);
+}
+
+void Node::switchParent(Node* parent) {
+  this->parent = parent;
 }
 
 // Called before children's init
@@ -44,4 +48,4 @@ void Node::_init() {}
 // Called after children's ready
 void Node::_ready() {}
 // Called every frame
-void Node::_process(float deltaTime) {}
+void Node::_process(float deltaTime, bool temporal) {}

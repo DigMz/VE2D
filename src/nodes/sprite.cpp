@@ -14,10 +14,7 @@ Sprite::Sprite (
     scale,
     rotation,
     name
-  ),
-  lastPosition(position),
-  lastScale(scale),
-  lastRotation(rotation)
+  )
 { }
 
 Sprite::Sprite (
@@ -35,9 +32,6 @@ Sprite::Sprite (
     rotation,
     name
   ),
-  lastPosition(position),
-  lastScale(scale),
-  lastRotation(rotation),
   texturePath(texturePath),
   lastTexturePath(texturePath)
 { }
@@ -50,16 +44,15 @@ void Sprite::_ready() {
   std::cout << "Ready CanvasItem: " << texturePath << std::endl;
 }
 
-void Sprite::_process(float deltaTime) {
-  if (lastPosition != global_position ||
-      lastScale != global_scale       ||
-      lastRotation != global_rotation ||
-      lastTexturePath != texturePath
-  ) { dirty = true; }
+void Sprite::_process(float deltaTime, bool temporal) {
+  if (temporal) rotation += 3.14159 * deltaTime;
 
-  lastPosition = global_position;
-  lastScale = global_scale;
-  lastRotation = global_rotation;
+  if (lastTexturePath != texturePath) { dirty = true; }
   lastTexturePath = texturePath;
+}
+
+void Sprite::updateTransform() {
+  Node2D::updateTransform();
+  if (transformDirty) dirty = true;
 }
 

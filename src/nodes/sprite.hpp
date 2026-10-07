@@ -24,7 +24,8 @@ public:
 
   void _init() override;
   void _ready() override;
-  void _process(float deltaTime) override;
+  void _process(float deltaTime, bool temporal) override;
+  void updateTransform() override;
 
   std::string texturePath = "assets/textures/texture.jpg";
   uint32_t textureId;
@@ -32,9 +33,6 @@ public:
   int quadIndex = -1;
 
 private:
-  glm::vec3 lastPosition;
-  glm::vec2 lastScale;
-  glm::vec1 lastRotation;
   std::string lastTexturePath;
 };
 

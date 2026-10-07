@@ -10,7 +10,10 @@ Node2D::Node2D () :
   rotation(0.0f),
   global_position(position),
   global_scale(scale),
-  global_rotation(rotation)
+  global_rotation(rotation),
+  lastPosition(position),
+  lastScale(scale),
+  lastRotation(rotation)
 {}
 
 Node2D::Node2D (
@@ -26,7 +29,10 @@ Node2D::Node2D (
   rotation(rotation),
   global_position(position),
   global_scale(scale),
-  global_rotation(rotation)
+  global_rotation(rotation),
+  lastPosition(position),
+  lastScale(scale),
+  lastRotation(rotation)
 { }
 
 glm::vec3 Node2D::get_global_position() { return global_position; }
@@ -42,7 +48,9 @@ glm::vec3 rotate_position(glm::vec3 position, glm::vec1 rotation) {
 }
 
 void Node2D::updateTransform() {
-  if (Node2D* parent2D = dynamic_cast<Node2D*>(parent)) {
+  Node2D* parent2D = dynamic_cast<Node2D*>(parent);
+
+  if (parent2D) {
     global_rotation = parent2D->global_rotation + rotation;
     glm::vec3 rotated_position = rotate_position(position, global_rotation);
     global_position = parent2D->global_position + glm::vec3({
@@ -59,6 +67,16 @@ void Node2D::updateTransform() {
     global_scale = scale;
     global_rotation = rotation;
   }
+
+  // A parent's dirty transform propagates down even if our own local fields
+  // didn't change, since our global transform still shifted because of it.
+  transformDirty = (parent2D && parent2D->transformDirty) ||
+    position != lastPosition ||
+    scale != lastScale ||
+    rotation != lastRotation;
+  lastPosition = position;
+  lastScale = scale;
+  lastRotation = rotation;
 
   // Recurse after updating our own global transform, so children see a fresh parent global
   for (std::unique_ptr<Node>& child : children) {

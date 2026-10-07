@@ -69,8 +69,8 @@ void Scene::init() {
   root->ready();
 }
 
-void Scene::process(float deltaTime) {
-  root->process(deltaTime);
+void Scene::process(float deltaTime, bool temporal) {
+  root->process(deltaTime, temporal);
   updateNode2DTransforms(*root);
 
   // Go through every node, add unique textures to the renderer, and map its id
@@ -111,6 +111,8 @@ void Scene::recordFrame(
 }
 
 void Scene::addSprite(std::unique_ptr<Sprite> sprite) {
+  sprite->switchParent(root.get());
+  updateNode2DTransforms(*sprite);
   pushSpriteDataToRenderer(*sprite);
   root->children.push_back(std::move(sprite));
 }

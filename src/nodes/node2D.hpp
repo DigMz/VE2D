@@ -19,12 +19,13 @@ public:
     std::string name = "Node2D"
   );
 
-  void updateTransform();
+  void virtual updateTransform();
 
   glm::vec3 position;
   glm::vec2 scale;
   glm::vec1 rotation;
 
+  bool transformDirty = false;
 
   glm::vec3 get_global_position();
   glm::vec2 get_global_scale();
@@ -34,6 +35,10 @@ protected:
   glm::vec3 global_position;
   glm::vec2 global_scale;
   glm::vec1 global_rotation;
+
+  glm::vec3 lastPosition;
+  glm::vec2 lastScale;
+  glm::vec1 lastRotation;
 };
 
 // Walks the subtree rooted at `node`, updating every Node2D found (skipping
