@@ -20,6 +20,7 @@ find_package(glm REQUIRED)
 find_package(Vulkan 1.4.335 REQUIRED)
 find_package(tinyobjloader REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+find_package(nlohmann_json REQUIRED CONFIG)
 # find_package(tinygltf REQUIRED)
 # find_package(KTX REQUIRED)
 
@@ -84,6 +85,7 @@ add_executable(${PROJECT_NAME}
     src/app/app.cpp
     src/renderer/renderer.cpp
     src/scenes/scene.cpp
+    src/scenes/scene_serializer.cpp
     src/nodes/node.cpp
     src/nodes/node2D.cpp
     src/nodes/sprite.cpp
@@ -100,7 +102,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
   CXX_STANDARD_REQUIRED ON
   CXX_EXTENSIONS OFF
 )
-target_link_libraries (${PROJECT_NAME} Vulkan::cppm SDL3::SDL3 imgui::imgui)
+target_link_libraries (${PROJECT_NAME} Vulkan::cppm SDL3::SDL3 imgui::imgui nlohmann_json::nlohmann_json)
 target_precompile_headers(${PROJECT_NAME} PRIVATE
   <vulkan/vulkan_raii.hpp>
   <vulkan/vulkan.hpp>

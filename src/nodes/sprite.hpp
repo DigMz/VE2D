@@ -1,6 +1,7 @@
 #pragma once
 
 #include "node2D.hpp"
+#include "utils/utils.hpp"
 #include <cstdint>
 
 class Sprite : public Node2D {
@@ -27,7 +28,7 @@ public:
   void _process(float deltaTime, bool temporal) override;
   void updateTransform() override;
 
-  std::string texturePath = "assets/textures/texture.jpg";
+  std::string texturePath = DEFAULT_TEXTURE_PATH;
   uint32_t textureId;
   bool dirty = false;
   int quadIndex = -1;

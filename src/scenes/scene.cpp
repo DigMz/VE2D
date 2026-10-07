@@ -3,6 +3,7 @@
 #include "nodes/node.hpp"
 #include "nodes/node2D.hpp"
 #include "nodes/sprite.hpp"
+#include "utils/utils.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -19,7 +20,10 @@ void Scene::funcTree(std::function<void(std::unique_ptr<Node>&)> func) { _funcTr
 
 void Scene::pushSpriteDataToRenderer(Sprite &sprite) {
   if (!textureIdRef.contains(sprite.texturePath)) {
-    textureIdRef[sprite.texturePath] = renderer->addTexture(sprite.texturePath);
+    int textureId = renderer->addTexture(sprite.texturePath);
+    textureIdRef[sprite.texturePath] = textureId >= 0
+      ? textureId
+      : textureIdRef.at(DEFAULT_TEXTURE_PATH);
   }
   sprite.textureId = textureIdRef[sprite.texturePath];
 
@@ -34,7 +38,10 @@ void Scene::pushSpriteDataToRenderer(Sprite &sprite) {
 
 void Scene::updateSpriteDataOnRenderer(Sprite &sprite) {
   if (!textureIdRef.contains(sprite.texturePath)) {
-    textureIdRef[sprite.texturePath] = renderer->addTexture(sprite.texturePath);
+    int textureId = renderer->addTexture(sprite.texturePath);
+    textureIdRef[sprite.texturePath] = textureId >= 0
+      ? textureId
+      : textureIdRef.at(DEFAULT_TEXTURE_PATH);
   }
   sprite.textureId = textureIdRef[sprite.texturePath];
 

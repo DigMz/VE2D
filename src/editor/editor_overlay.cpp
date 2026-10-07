@@ -2,6 +2,7 @@
 
 #include "nodes/node.hpp"
 #include "nodes/node2D.hpp"
+#include "nodes/sprite.hpp"
 
 #include <glm/fwd.hpp>
 #include <imgui.h>
@@ -158,6 +159,23 @@ EditorActions EditorOverlay::buildUI(float deltaTime, size_t quadCount, size_t t
   if (ImGui::Button("Add Quad", ImVec2(-FLT_MIN, 0.0f))) {
     actions.addQuad = true;
   }
+
+  ImGui::SeparatorText("File");
+  ImGui::InputText("Path", &scenePathBuffer);
+  if (ImGui::Button("Save")) {
+    actions.saveScene = true;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Save As")) {
+    actions.saveSceneAs = true;
+    actions.scenePath = scenePathBuffer;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Load")) {
+    actions.loadScene = true;
+    actions.scenePath = scenePathBuffer;
+  }
+
   ImGui::SeparatorText("Stats");
   ImGui::Text("Frame time: %.3f ms", smoothedDeltaTime * 1000.0f);
   ImGui::Text("FPS: %.1f", smoothedDeltaTime > 0.0f ? 1.0f / smoothedDeltaTime : 0.0f);
@@ -177,6 +195,9 @@ EditorActions EditorOverlay::buildUI(float deltaTime, size_t quadCount, size_t t
       glm::vec1 global_rot = node2D->get_global_rotation();
       ImGui::Text("Global Position: %.1f, %.1f, %.1f", global_pos.x, global_pos.y, global_pos.z);
       ImGui::Text("Global Rotation: %.1f", global_rot.x);
+    }
+    if (auto sprite = dynamic_cast<Sprite*>(selectedNode)) {
+      ImGui::InputText("TexturePath:", &sprite->texturePath);
     }
   }
 

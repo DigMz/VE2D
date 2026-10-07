@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils/utils.hpp"
 #include <assert.h>
 #include <cstdint>
 #include <iostream>
@@ -38,10 +39,6 @@ import vulkan.hpp;
 
 const uint32_t WIDTH  = 800;
 const uint32_t HEIGHT = 600;
-const std::vector<std::string> TEXTURE_PATHS = {
-  "assets/textures/texture.jpg",
-  "assets/textures/rockTexture.jpg"
-};
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<char const*> validationLayers = {
@@ -111,8 +108,11 @@ private:
   bool showEditor = false; // F1: editor UI with the game in a panel, vs. fullscreen game
 
   int nextQuadOffset = 1;
+  std::string currentScenePath = "assets/scenes/scene.json";
   void setEditorOpen(bool open);
   void addQuad();
+  void saveScene(const std::string& path);
+  void loadScene(const std::string& path);
   void resizeViewport(vk::Extent2D extent);
 
   static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT       severity,

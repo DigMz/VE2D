@@ -1,0 +1,50 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [],
+          "name": "Child Child Sprite",
+          "position": [
+            1.0,
+            0.0,
+            1.0
+          ],
+          "rotation": 54.97924041748047,
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "texturePath": "assets",
+          "type": "Sprite"
+        }
+      ],
+      "name": "Child Sprite",
+      "position": [
+        1.0,
+        0.0,
+        1.0
+      ],
+      "rotation": 55.979217529296875,
+      "scale": [
+        1.0,
+        1.0
+      ],
+      "texturePath": "assets/textures/texture.jpg",
+      "type": "Sprite"
+    }
+  ],
+  "name": "Root Sprite",
+  "position": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "rotation": 53.97926330566406,
+  "scale": [
+    2.0,
+    2.0
+  ],
+  "texturePath": "assets/textures/rockTexture.jpg",
+  "type": "Sprite"
+}

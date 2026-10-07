@@ -19,6 +19,7 @@
 #include "renderer/renderer.hpp"
 #include "nodes/node.hpp"
 #include "nodes/sprite.hpp"
+#include "scenes/scene_serializer.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -600,14 +601,6 @@ void Application::initScene() {
       "Child Child Sprite"
   )));
   root.children.push_back(std::unique_ptr<Node>(child));
-  // root.children.push_back(std::unique_ptr<Node>( new Sprite(
-  //   std::vector<std::unique_ptr<Node>> {},
-  //   glm::vec3(1.0f, 0.0f, 1.0f),
-  //   glm::vec2(1.0f),
-  //   glm::vec1(2.0f),
-  //   "assets/textures/circle.png",
-  //   "Child Sprite"
-  // )));
 
   std::cout << "Root Children: " << root.children.size() << std::endl;
 
@@ -649,6 +642,43 @@ void Application::addQuad() {
     glm::vec1 {0.0f}
   )));
   nextQuadOffset++;
+}
+
+void Application::saveScene(const std::string& path) {
+  try {
+    saveSceneToFile(currentScene->getRoot(), path);
+  } catch (const std::exception& e) {
+    std::cerr << "Application::saveScene: " << e.what() << std::endl;
+  }
+}
+
+void Application::loadScene(const std::string& path) {
+  std::unique_ptr<Node> newRoot;
+  try {
+    newRoot = loadSceneFromFile(path);
+  } catch (const std::exception& e) {
+    std::cerr << "Application::loadScene: " << e.what() << std::endl;
+    return;
+  }
+
+  device.waitIdle(); // the old Scene's Renderer is about to be torn down
+  editorOverlay->clearSelection(); // about to destroy the tree it may point into
+
+  currentScene.reset(new Scene(
+    std::move(newRoot),
+    std::make_unique<Renderer>(
+      MAX_FRAMES_IN_FLIGHT,
+      device,
+      physicalDevice,
+      queue,
+      commandPool,
+      swapChainSurfaceFormat,
+      cameraUBOs
+    )
+  ));
+  resizeViewport(swapChainExtent);
+
+  currentScenePath = path;
 }
 
 void Application::mainLoop() {
@@ -695,6 +725,8 @@ void Application::mainLoop() {
       editorOverlay->newFrame();
       editorActions = editorOverlay->buildUI(deltaTime, currentScene->getQuadCount(), currentScene->getTextureCount(), frameIndex, currentScene->getRoot());
       if (editorActions.addQuad) addQuad();
+      if (editorActions.saveScene)   saveScene(currentScenePath);
+      if (editorActions.saveSceneAs) { currentScenePath = editorActions.scenePath; saveScene(currentScenePath); }
     }
 
     // In the editor, the camera only responds while the mouse is over the "Game" panel.
@@ -708,8 +740,11 @@ void Application::mainLoop() {
 
     drawFrame();
 
-    // Resize after drawFrame(), since this frame's UI still references the old viewport images
-    if (showEditor) resizeViewport(editorActions.viewportSize);
+    // Resize/reload after drawFrame(), since this frame's UI still references the old viewport images
+    if (showEditor) {
+      resizeViewport(editorActions.viewportSize);
+      if (editorActions.loadScene) loadScene(editorActions.scenePath);
+    }
 	}
 
   device.waitIdle();

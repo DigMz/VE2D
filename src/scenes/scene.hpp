@@ -3,9 +3,11 @@
 #include "renderer/renderer.hpp"
 #include "nodes/node.hpp"
 #include "nodes/sprite.hpp"
+#include "utils/utils.hpp"
 #include <concepts>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -56,7 +58,7 @@ public:
 
 private:
   std::unordered_map<std::string, uint32_t> textureIdRef = {
-    {"assets/textures/texture.jpg", 0}
+    {DEFAULT_TEXTURE_PATH, 0}
   };
   std::unique_ptr<Renderer> renderer;
   std::unique_ptr<Node> root;

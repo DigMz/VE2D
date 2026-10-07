@@ -3,13 +3,32 @@
 #include "vulkan/vulkan.hpp"
 
 #include <stb_image.h>
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <filesystem>
+#include <unordered_set>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #	include <vulkan/vulkan_raii.hpp>
 #else
 import vulkan.hpp;
 #endif
+
+namespace {
+
+// Extensions stb_image.h's stbi_load() can decode (JPEG/PNG/TGA/BMP/PSD/GIF/HDR/PIC/PNM).
+bool hasStbSupportedExtension(const std::string& path) {
+  static const std::unordered_set<std::string> supportedExtensions = {
+    ".jpg", ".jpeg", ".png", ".tga", ".bmp", ".psd", ".gif", ".hdr", ".pic", ".pnm", ".ppm", ".pgm"
+  };
+  std::string extension = std::filesystem::path(path).extension().string();
+  std::transform(extension.begin(), extension.end(), extension.begin(),
+    [](unsigned char c) { return std::tolower(c); });
+  return supportedExtensions.contains(extension);
+}
+
+} // namespace
 
 void Renderer::init() {
   createTextureImages();
@@ -775,6 +794,10 @@ std::vector<vk::ImageView> Renderer::getViewportImageViews() const {
 }
 
 int Renderer::addTexture(std::string texturePath) {
+  if (!(std::filesystem::exists(texturePath) && hasStbSupportedExtension(texturePath))) {
+    return -1;
+  }
+
   auto [textureImage, textureImageMemory] = createTextureImage(texturePath);
   auto textureImageView = createTextureImageView(textureImage);
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils/utils.hpp"
 #include <assert.h>
 #include <cstdint>
 #include <functional>
@@ -97,7 +98,7 @@ public:
 
 private:
   const std::vector<std::string> TEXTURE_PATHS = {
-    "assets/textures/texture.jpg",
+    DEFAULT_TEXTURE_PATH,
   };
 
   int MAX_FRAMES_IN_FLIGHT;

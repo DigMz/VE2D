@@ -4,6 +4,8 @@
 #include <fstream>
 #include <glm/ext/vector_float2.hpp>
 
+const std::string DEFAULT_TEXTURE_PATH = "assets/textures/default.png";
+
 static std::vector<char> readFile(const std::string& filename) {
   // std::cout << std::filesystem::current_path() << std::endl;
   std::ifstream file(filename, std::ios::ate | std::ios::binary);

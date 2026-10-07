@@ -46,6 +46,7 @@
           stb
           shader-slang
           imgui
+          nlohmann_json
         ];
 
         shellHook = ''
